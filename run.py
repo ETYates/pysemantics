@@ -32,7 +32,8 @@ class Lexeme:
         """Convert PENN treebank tags to simple tags."""
         match self.tag:
             case "JJ" | "JJR" | "JJS":
-                self.cat = [('sel', 'n'),('cat', "n")]
+                self.cat = [[('cat', 'j')],
+                            [('sel', 'n'),('cat', "j")]]
             case "NN" | "NNS":
                 self.cat = [('cat', "n")]
             case "NNP" | "PRP" | "NNPS":
@@ -41,7 +42,9 @@ class Lexeme:
                             ]
             case "DT":
                 self.cat =[[('sel', 'n'),('cat', "d")],
-                           [('sel', 'n'),('cat', "d"),('neg', 'case')]
+                           [('sel', 'n'),('cat', "d"),('neg', 'case')],
+                           [('sel', 'j'),('cat', "d")],
+                           [('sel', 'j'),('cat', "d"),('neg', 'case')]
                            ]
             case "VBZ" | "VBD" | "VBP" | "VBN" | "VBG" | "VB":
                 match self.lemma:
@@ -50,7 +53,10 @@ class Lexeme:
                     case "have":
                         self.cat = [('sel', 'v'), ('cat', 'h')]
                     case "be":
-                        self.cat = [('sel', 'v'),('cat', 'b')]
+                        self.cat = [[('sel', 'v'),('cat', 't')],
+                                    [('sel', 'j'),('sel', 'd'),('cat', 'v')],
+                                    [('sel', 'd'),('sel', 'd'),('cat', 'v')]
+                                    ]
                     case _:
                         self.cat = [[('sel', 'd'),('sel', 'd'),('cat','v')],
                                     [('sel', 'c'),('sel', 'd'),('cat','v')]
@@ -126,7 +132,7 @@ def __main__():
             if text not in lexicon.members:
                 lexicon.add(text, cat)
                 lexicon.members.add(text)
-        dt = parse(lexicon.lexicon, 'c', -1 * float(0.0000001), inpt)
+        dt = parse(lexicon.lexicon, 'c', -1 * float(0.0000000001), inpt)
         pptree(dt2t(dt))
         pprint.pprint(lexicon.lexicon)
 
