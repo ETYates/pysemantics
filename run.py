@@ -132,7 +132,7 @@ def __main__():
             if text not in lexicon.members:
                 lexicon.add(text, cat)
                 lexicon.members.add(text)
-        dt = parse(lexicon.lexicon, 'c', -1 * float(0.0000000001), inpt)
+        dt = parse(lexicon.lexicon, 'c', -1 * float(1e-10), inpt)
         pptree(dt2t(dt))
         pprint.pprint(lexicon.lexicon)
 
