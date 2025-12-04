@@ -58,8 +58,10 @@ class Lexeme:
                                     [('sel', 'd'),('sel', 'd'),('cat', 'v')]
                                     ]
                     case _:
-                        self.cat = [[('sel', 'd'),('sel', 'd'),('cat','v')],
-                                    [('sel', 'c'),('sel', 'd'),('cat','v')]
+                        self.cat = [
+                                    [('sel', 'd'),('sel', 'd'),('cat','v')],
+                                    [('sel', 'c'),('sel', 'd'),('cat','v')],
+                                    [('sel', 'd'),('cat','v')]
                                     ]
             case ".":
                 self.cat = [('cat', 's')]
@@ -134,6 +136,7 @@ def __main__():
                 lexicon.members.add(text)
         dt = parse(lexicon.lexicon, 'c', -1 * float(1e-10), inpt)
         pptree(dt2t(dt))
+        print(type(dt))
         pprint.pprint(lexicon.lexicon)
 
 
