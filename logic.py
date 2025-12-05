@@ -8,7 +8,17 @@ Quant = Callable[[Unary],Callable[[Unary], bool]]
 
 
 @dataclass
-class Pred:
+class Expr:
+    """General expression class, all others inherit from this. The value is the
+       lambda statement itself to be executed, the later classes add the data to
+       allow for the realization of string representations for derived expressions
+       using substitution.
+    """
+    value: Unary | Binary | Quant
+
+
+@dataclass
+class Pred(Expr):
     """Class to represent predicates as a data structure."""
     name: str
     args: list[str]
@@ -16,21 +26,23 @@ class Pred:
     def __str__(self) -> str:
         return f"{self.name}.({', '.join(self.args)})"
 
+
 @dataclass
-class Bind:
+class Bind(Expr):
     """Class to represent lambda statements and quantifiers."""
+    name: str
     var: str
-    binder: str
-    body: Pred | Bind | Op
+    body: Expr
 
     def __str__(self) -> str:
-        return f"{self.binder}{self.var}.{self.body}"
+        return f"{self.name}{self.var}.{self.body}"
+
 
 @dataclass
-class Op:
+class Op(Expr):
     """Class to represent logical operators and, or, if, and negation."""
     name: str
-    args: list[Bind | Pred | Op]
+    args: list[Expr]
 
     def __str__(self) -> str:
         arity = len(self.args)
@@ -41,6 +53,7 @@ class Op:
             return f"{op.join([str(arg) for arg in self.args])}"
         else:
             raise Exception("ArityError: Invalid arity for predicate.")
+
 
 class Model:
 

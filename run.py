@@ -8,8 +8,15 @@ parsing.
 import spacy
 import pprint
 from mgtdbp import parse, dt2t, pptree
+from dataclasses import dataclass
+from logic import Expr
 
 nlp = spacy.load("en_core_web_sm")
+
+@dataclass
+class Node:
+    """Tree data structure for evaluation against the model."""
+    data: Expr | tuple[Node, Node]
 
 class Lexeme:
     """A simple class to carry data from spacy into the MG parser. There is
@@ -135,6 +142,7 @@ def __main__():
         dt = parse(lexicon.lexicon, 'c', -1 * float(1e-10), inpt)
         pptree(dt2t(dt))
         pprint.pprint(lexicon.lexicon)
+        pprint.pprint(dt)
 
 
 if __name__ == "__main__":
