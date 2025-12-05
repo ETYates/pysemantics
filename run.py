@@ -7,16 +7,24 @@ parsing.
 """
 import spacy
 import pprint
+from typing import Any
 from mgtdbp import parse, dt2t, pptree
 from dataclasses import dataclass
-from logic import Expr
+from logic import Model, Expr
 
 nlp = spacy.load("en_core_web_sm")
 
 @dataclass
 class Node:
     """Tree data structure for evaluation against the model."""
-    data: Expr | tuple[Node, Node]
+    data: Expr | tuple[Any, Any]
+
+    def __str__(self):
+        match self.data:
+            case (t,u):
+                return f"[{str(t)}, {str(u)}]"
+            case _:
+                return str(self.data)
 
 class Lexeme:
     """A simple class to carry data from spacy into the MG parser. There is
@@ -110,7 +118,6 @@ class Lexicon:
             entry = ([text], cat)
             self.lexicon.append(entry)
 
-
     def __str__(self):
         return str(self.lexicon)
 
@@ -127,8 +134,26 @@ def tokenize(raw_input: str):
         lexes.append(lex)
     return lexes
 
+
+def convert(dt, model):
+    print('----')
+    pprint.pprint(dt)
+    match dt:
+        case ([entry], cat):
+            text, lemma = entry.split(':')
+            return Node(model.word2lf(cat, lemma.strip()))
+        case ([], cat):
+            return Node(model.word2lf(cat))
+        case ['*', dt1, dt2]:
+            t1 = convert(dt1, model)
+            t2 = convert(dt2, model)
+            return Node((t1,t2))
+        case _:
+            raise Exception(f"Invalid format for output list-derivation tree: {dt}")
+
 def __main__():
     lexicon = Lexicon()
+    model = Model()
     while (raw_input := input("|- ")) != 'quit':
         lexes = tokenize(raw_input)
         inpt = []
@@ -140,9 +165,8 @@ def __main__():
                 lexicon.add(text, cat)
                 lexicon.members.add(text)
         dt = parse(lexicon.lexicon, 'c', -1 * float(1e-10), inpt)
-        pptree(dt2t(dt))
-        pprint.pprint(lexicon.lexicon)
-        pprint.pprint(dt)
+        tree = convert(dt, model)
+        print(str(tree))
 
 
 if __name__ == "__main__":

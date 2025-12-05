@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Any
 
 
 Unary = Callable[[str],bool]
@@ -14,8 +14,14 @@ class Expr:
        allow for the realization of string representations for derived expressions
        using substitution.
     """
-    value: Unary | Binary | Quant
+    ...
 
+@dataclass
+class Entity(Expr):
+    name: str
+
+    def __str__(self):
+        return self.name
 
 @dataclass
 class Pred(Expr):
@@ -35,7 +41,10 @@ class Bind(Expr):
     body: Expr
 
     def __str__(self) -> str:
-        return f"{self.name}{self.var}.{self.body}"
+        if isinstance(self.body, Op):
+            return f"{self.name}{self.var}[{self.body}]"
+        else:
+            return f"{self.name}{self.var}.{self.body}"
 
 
 @dataclass
@@ -83,3 +92,42 @@ class Model:
 
     def add_binary(self, name: str) -> Callable[[str], Callable[[str], None]]:
         return lambda y: lambda x: self.binaries.setdefault(name, dict()).setdefault(x, set()).add(y)
+
+    def word2lf(self, cat: list[tuple[str,str]], lemma: str = ''):
+        match cat:
+            case [('sel', 'd'),('sel', 'd'),('cat', 'v')]:
+                return Bind(name='\\',
+                            var='y',
+                            body=Bind(name='\\',
+                                      var='x',
+                                      body=Pred(name=lemma,
+                                                args=['x', 'y'])))
+            case [('sel', 'd'),('cat', 'v')]:
+                return Bind(name='\\',
+                            var='x',
+                            body=Pred(name=lemma,
+                                      args=['x', 'y']))
+            case [('cat', 'd'), *_]:
+                return Entity(lemma)
+            case [('cat', 'n'), *_]:
+                return Bind('\\', 'x', Pred(lemma, ['x']))
+            case [('cat', 'j')]:
+                return Bind('\\', 'x', Pred(lemma, ['x']))
+            case [('sel', 'n'),('cat', 'd'), *_]:
+                p = Pred(name='P', args=['x'])
+                q = Pred(name='Q', args=['x'])
+                match lemma:
+                    case 'every':
+                        op = Op('->', [p, q])
+                        bind = Bind('@', 'x', op)
+                        return Bind('\\','P',Bind('\\','Q', bind))
+                    case 'a' | 'an':
+                        op = Op('&', [p, q])
+                        bind = Bind('#', 'x', op)
+                        return Bind('\\','P',Bind('\\','Q', bind))
+                    case _:
+                        raise Exception(f"Current determiner {lemma} is unimplemented.")
+            case _:
+                return None
+
+
