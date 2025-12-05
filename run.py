@@ -10,8 +10,6 @@ import pprint
 from mgtdbp import parse, dt2t, pptree
 
 nlp = spacy.load("en_core_web_sm")
-doc = nlp("some text")
-
 
 class Lexeme:
     """A simple class to carry data from spacy into the MG parser. There is
@@ -136,7 +134,6 @@ def __main__():
                 lexicon.members.add(text)
         dt = parse(lexicon.lexicon, 'c', -1 * float(1e-10), inpt)
         pptree(dt2t(dt))
-        print(type(dt))
         pprint.pprint(lexicon.lexicon)
 
 
