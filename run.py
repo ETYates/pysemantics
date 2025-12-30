@@ -136,10 +136,10 @@ def tokenize(raw_input: str):
 
 
 def convert(dt, model):
-    print('----')
-    pprint.pprint(dt)
+    """Conversion of derivation-tree into a tree of lambda applications"""
     match dt:
         case ([entry], cat):
+            print(entry)
             text, lemma = entry.split(':')
             return Node(model.word2lf(cat, lemma.strip()))
         case ([], cat):
