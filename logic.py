@@ -6,6 +6,14 @@ Unary = Callable[[str],bool]
 Binary = Callable[[str], Unary]
 Quant = Callable[[Unary],Callable[[Unary], bool]]
 
+LAMBDA = '\\'
+EXISTS = '#'
+FORALL = '@'
+IOTA = '~'
+IFTHEN = '->'
+AND = '&'
+OR = '|'
+NOT = '!'
 
 @dataclass
 class Expr:
@@ -50,7 +58,7 @@ class Term(Expr):
     term: Entity
 
     def __str__(self):
-        match term:
+        match self.term:
             case Const(name):
                 return name
             case Var(name):
@@ -62,59 +70,105 @@ class Term(Expr):
 @dataclass
 class Pred(Expr):
     """Class to represent predicates as a data structure."""
-    name: Entity
+    term: Entity
     args: list[Entity]
 
     def __str__(self) -> str:
         if self.args:
-          return f"{self.name}({', '.join([str(arg) for arg in self.args])})"
+          return f"{self.term}({', '.join([str(arg) for arg in self.args])})"
         else:
-          return f"{self.name}"
+          return f"{self.term}"
 
 
 @dataclass
 class Bind(Expr):
     """Class to represent lambda statements and quantifiers."""
-    name: str
-    var: Var
+    binder: str
+    var: Entity
     expr: Expr
 
     def __str__(self) -> str:
         if isinstance(self.expr, Op):
-            return f"{self.name}{self.var}[{self.expr}]"
+            return f"{self.binder}{self.var}[{self.expr}]"
         else:
-            return f"{self.name}{self.var}.{self.expr}"
+            return f"{self.binder}{self.var}.{self.expr}"
 
 
 @dataclass
 class Op(Expr):
     """Class to represent logical operators and, or, if, and negation."""
-    name: str
+    rator: str
     args: list[Expr]
 
     def __str__(self) -> str:
         arity = len(self.args)
 
         if arity == 1:
-            return f"{self.name}{self.args[0]}"
+            return f"{self.rator}{self.args[0]}"
 
         elif arity == 2:
-            op = f" {self.name} "
-            return f"{op.join([str(arg) for arg in self.args])}"
+            rator = f" {self.rator} "
+            return f"{rator.join([str(arg) for arg in self.args])}"
 
         else:
             raise Exception("ArityError: Invalid arity for predicate.")
 
-def build_predicate(name: str, arity: int = 1) -> Expr:
-    if arity == 1:
-        pred = Pred(Const(name), [Var('x')])
-        return Bind('\\', Var('x'), pred)
-    elif arity == 2:
-        pred = Pred(Const(name), [Var('x'), Var('y')])
-        bind = Bind('\\', Var('x'), pred)
-        return Bind('\\', Var('y'), bind)
+def build_unary(lemma: str) -> Expr:
+
+    term: Entity = Const(lemma)
+    var = Var('x')
+    args: list[Entity] = [var]
+
+    expr: Expr = Pred(term, args)
+    name = LAMBDA
+    expr = Bind(name, var, expr)
+    return expr
+
+def build_binary(lemma: str) -> Expr:
+
+    term: Entity = Const(lemma)
+
+    x = Var('x')
+    y = Var('y')
+    args: list[Entity] = [x, y]
+    expr: Expr = Pred(term, args)
+
+    name = LAMBDA
+    expr = Bind(name, y, expr)
+    expr = Bind(name, x, expr)
+    return expr
+
+def build_quant(lemma: str) -> Expr:
+
+    var: Entity = Var('x')
+    p: Entity = Var('P')
+    q: Entity = Var('Q')
+
+    if lemma == 'every':
+        binder = FORALL
+        rator  = IFTHEN
+
+    elif lemma == 'a':
+        binder = EXISTS
+        rator  = AND 
+
+    elif lemma == 'an':
+        binder = EXISTS
+        rator = EXISTS
+
     else:
-        raise Exception("ArrError: Arity of predicate is greater than 2.")
+        raise Exception(f"Current determiner {lemma} is unimplemented.")
+
+    expr1: Expr = Pred(term=p, args=[var])
+    expr2: Expr = Pred(term=q, args=[var])
+    args: list[Expr] = [expr1, expr2]
+    expr: Expr = Op(rator, args)
+    
+    expr = Bind(binder=binder, var=var, expr=expr)
+    expr = Bind(binder=LAMBDA, var=q, expr=expr)
+    expr = Bind(binder=LAMBDA, var=p, expr=expr)
+
+    return expr
 
 def subst_term(v: Entity,
                w: Entity,
@@ -305,49 +359,67 @@ class Model:
     def word2lf(self, cat: list[tuple[str,str]], lemma: str = ''):
         match cat:
             case [('sel', 'd'),('sel', 'd'),('cat', 'v')]:
-                return Bind(name='\\',
-                            var=Var('y'),
-                            expr=Bind(name='\\',
-                                      var=Var('x'),
-                                      expr=Pred(name=Const(lemma),
-                                                args=[Var('x'), Var('y')])))
+                expr = build_binary(lemma)
+                return expr
+
             case [('sel', 'j'),('sel', 'd'),('cat', 'v')]:
-                return Bind(name='\\',
-                            var=Var('P'),
-                            expr=Pred(name=Var('P'), args=[]))
+                var = Var('P')
+                args: list[Entity] = []
+                name = LAMBDA
+                expr = Pred(term=var, args=args)
+                expr = Bind(name, var, expr)
+                return expr
+
             case [('sel', 'd'),('cat', 'v')]:
-                return Bind(name='\\',
-                            var=Var('x'),
-                            expr=Pred(name=Const(lemma),
-                                      args=[Var('x'), Var('y')]))
+                expr = build_unary(lemma)
+                return expr
+
             case [('cat', 'd'), *_]:
-                return Term(Const(lemma))
+                expr = Term(Const(lemma))
+                return expr
+
             case [('cat', 'n'), *_]:
-                return Bind('\\', Var('x'), Pred(Const(lemma), [Var('x')]))
+                expr = build_unary(lemma)
+                return expr
+
             case [('cat', 'j')]:
-                return Bind('\\', Var('x'), Pred(Const(lemma), [Var('x')]))
+                expr = build_unary(lemma)
+                return expr
+
             case [('sel', 'n'), ('cat', 'j')]:
-                return Bind('\\', Var('P'), Bind('\\', Var('x'), Op('&', [Pred(Var('P'), [Var('x')]), Pred(Const(lemma), [Var('x')])])))
+                p = Var('P')
+                x = Var('x')
+
+                expr1 = Pred(term=Const(lemma), args=[x])
+                expr2 = Pred(term=p, args=[x])
+
+                rator = AND
+                expr = Op(rator, args=[expr1, expr2])
+                expr = Bind(binder=LAMBDA, var=x, expr=expr)
+                expr = Bind(binder=LAMBDA, var=p, expr=expr)
+                return expr
+
             case [('sel', 'n'),('cat', 'd'), *_]:
-                p = Pred(name=Const('P'), args=[Var('x')])
-                q = Pred(name=Const('Q'), args=[Var('x')])
-                match lemma:
-                    case 'every':
-                        op = Op('->', [p, q])
-                        bind = Bind('@', Var('x'), op)
-                        return Bind('\\',Var('P'),Bind('\\',Var('Q'), bind))
-                    case 'a' | 'an':
-                        op = Op('&', [p, q])
-                        bind = Bind('#', Var('x'), op)
-                        return Bind('\\',Var('P'),Bind('\\',Var('Q'), bind))
-                    case _:
-                        raise Exception(f"Current determiner {lemma} is unimplemented.")
+                expr = build_quant(lemma)
+                return expr
+
+            case [('sel', 'j'),('cat', 'd'), *_]:
+                expr = build_quant(lemma)
+                return expr
+
             case _:
                 return None
 
 
 if __name__ == "__main__":
     p = build_predicate('know', 2)
-    e = Term(Const('e'))
-    p = apply((p, e))
-    print(p)
+    a = Term(Const('a'))
+    b = Term(Const('b'))
+    p = apply((p, a))
+    p = apply((p, b))
+    forall = build_quant('#')
+    print(forall)
+
+    lam1 = Bind('\\', Var('x'), Pred(Const('P'), [Var('x')]))
+    lam2 = Bind('\\', Var('Q'), Pred(Const('Q'), [Var('y')]))
+    print(apply((lam1, lam2)))

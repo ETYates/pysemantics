@@ -43,53 +43,68 @@ class Lexeme:
 
     def set_cat(self) -> None:
         """Convert PENN treebank tags to simple tags."""
+
         match self.tag:
+
             case "JJ" | "JJR" | "JJS":
                 self.cat = [[('cat', 'j')],
                             [('sel', 'n'),('cat', "j")]]
+
             case "NN" | "NNS":
-                self.cat = [('cat', "n")]
+                self.cat = [[('cat', "n")]]
+
             case "NNP" | "PRP" | "NNPS":
                 self.cat = [[('cat', 'd')],
                             [('cat', 'd'),('neg', 'case')]
                             ]
+
             case "DT":
                 self.cat =[[('sel', 'n'),('cat', "d")],
                            [('sel', 'n'),('cat', "d"),('neg', 'case')],
                            [('sel', 'j'),('cat', "d")],
-                           [('sel', 'j'),('cat', "d"),('neg', 'case')]
-                           ]
+                           [('sel', 'j'),('cat', "d"),('neg', 'case')]]
+
             case "VBZ" | "VBD" | "VBP" | "VBN" | "VBG" | "VB":
                 match self.lemma:
                     case "do":
-                        self.cat = [('sel', 'v'), ('cat', 't')]
+                        self.cat = [[('sel', 'v'), ('cat', 't')]]
                     case "have":
-                        self.cat = [('sel', 'v'), ('cat', 'h')]
+                        self.cat = [[('sel', 'v'), ('cat', 'h')]]
                     case "be":
                         self.cat = [[('sel', 'v'),('cat', 't')],
                                     [('sel', 'j'),('sel', 'd'),('cat', 'v')],
-                                    [('sel', 'd'),('sel', 'd'),('cat', 'v')]
-                                    ]
+                                    [('sel', 'd'),('sel', 'd'),('cat', 'v')]]
                     case _:
                         self.cat = [
                                     [('sel', 'd'),('sel', 'd'),('cat','v')],
                                     [('sel', 'c'),('sel', 'd'),('cat','v')],
-                                    [('sel', 'd'),('cat','v')]
-                                    ]
+                                    [('sel', 'd'),('cat','v')]]
             case ".":
-                self.cat = [('cat', 's')]
+                self.cat = [[('cat', 's')]]
+
             case "RB" | "RBR" | "RBS":
-                self.cat = [('cat', 'r')]
+                self.cat = [[('cat', 'r')]]
+
             case "IN":
-                self.cat = [('sel', 'd'),('cat','p')]
+                self.cat = [[('sel', 'd'),
+                             ('cat','p')]]
+
             case "MD":
-                self.cat = [('sel', 'v'), ('sel', 't')]
+                self.cat = [[('sel', 'v'), 
+                             ('sel', 't')]]
+
             case "EX":
-                self.cat = [('cat', 'x')]
+                self.cat = [[('cat', 'x')]]
+
             case "WP":
-                self.cat = [('cat', 'd'), ('neg', 'wh')]
+                self.cat = [[('cat', 'd'),
+                             ('neg', 'wh')]]
+
             case "WDT":
-                self.cat = [('sel', 'n'), ('cat', 'd'), ('neg', 'wh')]
+                self.cat = [[('sel', 'n'), 
+                             ('cat', 'd'), 
+                             ('neg', 'wh')]]
+
             case _:
                 raise Exception(f"POS tag {self.tag} is unimplemented.")
 
@@ -110,12 +125,8 @@ class Lexicon:
         self.members = set() # Keeps track of which words are in lexicon.
 
     def add(self, text, cat):
-        if isinstance(cat,list) and all(isinstance(f, list) for f in cat):
-            for f in cat:
-                entry = ([text], f)
-                self.lexicon.append(entry)
-        else:
-            entry = ([text], cat)
+        for f in cat:
+            entry = ([text], f)
             self.lexicon.append(entry)
 
     def __str__(self):
@@ -137,17 +148,23 @@ def tokenize(raw_input: str):
 
 def convert(dt, model):
     """Conversion of derivation-tree into a tree of lambda applications"""
+
     match dt:
         case ([entry], cat):
-            print(entry)
             text, lemma = entry.split(':')
             return Node(model.word2lf(cat, lemma.strip()))
+
         case ([], cat):
             return Node(model.word2lf(cat))
+
         case ['*', dt1, dt2]:
             t1 = convert(dt1, model)
             t2 = convert(dt2, model)
             return Node((t1,t2))
+
+        case ['o', dt]:
+            return convert(dt, model)
+
         case _:
             raise Exception(f"Invalid format for output list-derivation tree: {dt}")
 
