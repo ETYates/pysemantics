@@ -1,10 +1,8 @@
 from dataclasses import dataclass
-from typing import Callable, Any
+from collections.abc import Callable
+from typing import get_args
 
-
-Unary = Callable[[str],bool]
-Binary = Callable[[str], Unary]
-Quant = Callable[[Unary],Callable[[Unary], bool]]
+Truth = bool | None
 
 LAMBDA = '\\'
 EXISTS = '#'
@@ -25,7 +23,7 @@ class Expr:
     ...
 
 @dataclass
-class Entity:
+class Entity(Expr):
     ...
 
 
@@ -50,21 +48,8 @@ class Wff(Entity):
     expr: Expr
 
     def __str__(self):
-        return str(expr)
+        return str(self.expr)
 
-
-@dataclass
-class Term(Expr):
-    term: Entity
-
-    def __str__(self):
-        match self.term:
-            case Const(name):
-                return name
-            case Var(name):
-                return name
-            case Wff(expr):
-                return str(expr)
 
 
 @dataclass
@@ -113,6 +98,7 @@ class Op(Expr):
         else:
             raise Exception("ArityError: Invalid arity for predicate.")
 
+
 def build_unary(lemma: str) -> Expr:
 
     term: Entity = Const(lemma)
@@ -124,19 +110,20 @@ def build_unary(lemma: str) -> Expr:
     expr = Bind(name, var, expr)
     return expr
 
+
 def build_binary(lemma: str) -> Expr:
 
     term: Entity = Const(lemma)
 
-    x = Var('x')
-    y = Var('y')
+    x, y = Var('x'), Var('y')
     args: list[Entity] = [x, y]
     expr: Expr = Pred(term, args)
 
     name = LAMBDA
-    expr = Bind(name, y, expr)
     expr = Bind(name, x, expr)
+    expr = Bind(name, y, expr)
     return expr
+
 
 def build_quant(lemma: str) -> Expr:
 
@@ -170,6 +157,7 @@ def build_quant(lemma: str) -> Expr:
 
     return expr
 
+
 def subst_term(v: Entity,
                w: Entity,
                term: Entity) -> Entity:
@@ -178,6 +166,7 @@ def subst_term(v: Entity,
         return w
     else:
         return term
+
 
 def alpha_conversion(v: Entity,
                      w: Entity,
@@ -200,6 +189,7 @@ def alpha_conversion(v: Entity,
 
         case _:
             return expr
+
 
 def subst_terms(v: Entity,
                 w: Entity,
@@ -228,12 +218,12 @@ def subst_terms(v: Entity,
                                term) for term in args]
             return Pred(name, args)
 
-        case Term(term):
-            term = subst_term(v, w, term)
-            return Term(term)
+        case Entity():
+            return subst_term(v, w, expr)
 
         case _:
             return expr
+
 
 def subst_expr(v: Var, w: Expr, expr: Expr) -> Expr:
 
@@ -249,10 +239,10 @@ def subst_expr(v: Var, w: Expr, expr: Expr) -> Expr:
 
                 match args:
                     case [arg]:
-                        return apply((w, Term(arg)))
+                        return beta_reduction((w, arg))
                     case [arg1, arg2]:
-                        w_prime = apply((w, Term(arg1)))
-                        return apply((w_prime, Term(arg2)))
+                        w_prime = beta_reduction((w, arg1))
+                        return beta_reduction((w_prime, arg2))
                     case _:
                         raise Exception("Invalid arity for predicate in expression substitution.")
             else:
@@ -262,13 +252,12 @@ def subst_expr(v: Var, w: Expr, expr: Expr) -> Expr:
             args = [subst_expr(v, w, expr) for expr in args]
             return Op(name, args)
 
-        case Term(Wff(expr)):
+        case Wff(expr):
             expr = subst_expr(v, w, expr)
-            term = Wff(expr)
-            return Term(term)
+            return Wff(expr)
 
-        case Term(term):
-           if v == term:
+        case Entity():
+           if v == expr:
                return w
            else:
                return expr
@@ -276,31 +265,71 @@ def subst_expr(v: Var, w: Expr, expr: Expr) -> Expr:
         case _:
             return expr
 
-def apply(exprs: tuple[Expr, Expr]) -> Expr:
+
+def expr_type(expr: Expr):
+
+    if isinstance(expr, Entity):
+        return Entity
+    
+    elif isinstance(expr, Pred):
+        return Truth
+
+    elif isinstance(expr, Op):
+        return Truth
+                
+    elif isinstance(expr, Bind):
+
+        if expr.binder == LAMBDA:
+
+            if isinstance(expr.var, Wff):
+                return Entity
+
+            if isinstance(expr.var, Var):
+                if expr.var.name.islower():
+                    return Callable[[Entity], expr_type(expr.expr)]
+                else:
+                    typ = Callable[[Entity], Truth]
+                    return Callable[[typ], expr_type(expr.expr)]
+
+            elif isinstance(expr.var, Const):
+                if expr.var.name.islower():
+                    return Callable[[Entity], expr_type(expr.expr)]
+                else:
+                    typ = Callable[[Entity], Truth]
+                    return Callable[[typ], expr_type(expr.expr)]
+
+        elif expr.binder == EXISTS:
+            return Truth
+
+        elif expr.binder == FORALL:
+            return Truth
+
+
+def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
 
     match exprs:
 
-        case Term(term), Bind('\\', Var(name), expr):
+        case Const(term), Bind('\\', Var(name), expr):
             if name.islower():
-                return subst_terms(Var(name), term, expr)
+                return subst_terms(Var(name), Const(term), expr)
             else:
                 raise Exception("AppError: Invalid types for function application.")
 
-        case Bind('\\', Var(name), expr), Term(term):
+        case Bind('\\', Var(name), expr), Const(term):
             if name.islower():
                 print('---')
-                return subst_terms(Var(name), term, expr)
+                return subst_terms(Var(name), Const(term), expr)
             else:
                 raise Exception("AppError: Invalid types for function application.")
 
-        case Bind(name='\\', var=Var(name1), expr=expr1), Bind(name='\\', var=Var(name2), expr=expr2):
+        case Bind(binder='\\', var=Var(name1), expr=expr1), Bind(binder='\\', var=Var(name2), expr=expr2):
             if name1.isupper() and name2.islower() \
             or name1.islower() and name2.isupper():
                 v = Var(name1)
                 w = Bind('\\', Var(name2), expr2)
                 return subst_expr(v, w, expr1)
             else:
-                raise Exception("AppError: Invalid types for function application.")
+                raise Exception(f"AppError: Invalid types for function application: {name1} and {name2}")
 
         case _:
                 raise Exception("AppError: Invalid types for function application.")
@@ -313,48 +342,6 @@ class Model:
         self.entities: set[Entity] = set()                                    # x : e
         self.unaries: dict[str, dict[Entity, bool]] = dict()                  # λx.P(x)
         self.binaries: dict[str, dict[Entity, dict[Entity, bool]]] = dict()   # λy.λx.R(x,y)
-
-    def eval(self, expr: Expr) -> bool | None:
-        match expr:
-
-            case Op(name='&', args=[arg1, arg2]):
-                return self.eval(arg1) and self.eval(arg2)
-
-            case Op(name='->', args=[arg1, arg2]):
-                return (not self.eval(arg1)) or self.eval(arg2)
-
-            case Pred(name, args=[arg]):
-                i = self.unaries.get(name, None)
-                if i:
-                    return i.get(arg, None)
-                else:
-                    return None
-
-            case Pred(name, args=[arg1, arg2]):
-                i = self.binaries.get(name, None)
-                if i:
-                    i2 = i.get(arg1, None)
-                    if i2:
-                        return i2.get(arg2, None)
-                    else:
-                        return None
-                else:
-                    return None
-
-            case Bind(name, var, expr):
-                match name:
-                    case '\\':
-                        raise Exception("No lambdas allowed.")
-                    case '#':
-                        return any([self.eval(subst_terms(var, e, expr)) for e in self.entities])
-                    case '@':
-                        return all([self.eval(subst_terms(var, e, expr)) for e in self.entities])
-                    case _:
-                        raise Exception("EvalError: Binder not found.")
-            case _:
-                raise Exception("EvalError: Cannot evaluate.")
-
-
 
     def word2lf(self, cat: list[tuple[str,str]], lemma: str = ''):
         match cat:
@@ -375,7 +362,7 @@ class Model:
                 return expr
 
             case [('cat', 'd'), *_]:
-                expr = Term(Const(lemma))
+                expr = Const(lemma)
                 return expr
 
             case [('cat', 'n'), *_]:
@@ -412,14 +399,9 @@ class Model:
 
 
 if __name__ == "__main__":
-    p = build_predicate('know', 2)
-    a = Term(Const('a'))
-    b = Term(Const('b'))
-    p = apply((p, a))
-    p = apply((p, b))
-    forall = build_quant('#')
-    print(forall)
-
-    lam1 = Bind('\\', Var('x'), Pred(Const('P'), [Var('x')]))
-    lam2 = Bind('\\', Var('Q'), Pred(Const('Q'), [Var('y')]))
-    print(apply((lam1, lam2)))
+    expr1 = build_quant('a')
+    expr2 = build_unary('P')
+    print(expr_type(expr1))
+    print(expr_type(expr2))
+    typ = expr_type(expr1)
+    print(get_args(typ)[0][0])
