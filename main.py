@@ -1,5 +1,5 @@
 from lexer import Lexer, Lexicon
-from logic import Model
+from logic import Model, Translator
 from parser import Parser
 
 class SymbolicAI:
@@ -9,6 +9,7 @@ class SymbolicAI:
         self.parser: Parser = Parser()
         self.model: Model = Model()
         self.lexer: Lexer = Lexer()
+        self.translator = Translator()
 
     def run(self, raw_input: str):
 
@@ -16,7 +17,7 @@ class SymbolicAI:
         self.lexicon.add_lexes(lexes)
 
         derivation_tree = self.parser.parse(self.lexicon, lexes)
-        semantic_tree = self.model.translate(derivation_tree)
+        semantic_tree = self.translator.translate(derivation_tree)
 
         return semantic_tree
 
