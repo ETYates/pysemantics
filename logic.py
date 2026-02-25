@@ -99,6 +99,28 @@ class Op(Expr):
             raise Exception("ArityError: Invalid arity for predicate.")
 
 
+class Node:
+    data: Expr | tuple[Any, Any]
+
+    def __init__(self, data):
+        self.data = data
+
+    def __str__(self):
+        match self.data:
+            case (t, u):
+                return f"[{t}, {u}]"
+            case _:
+                return str(self.data)
+
+
+class Model:
+
+    def __init__(self) -> None:
+        self.entities: set[Entity] = set()                                    # x : e
+        self.unaries: dict[str, dict[Entity, bool]] = dict()                  # λx.P(x)
+        self.binaries: dict[str, dict[Entity, dict[Entity, bool]]] = dict()   # λy.λx.R(x,y)
+
+
 def build_unary(lemma: str) -> Expr:
 
     term: Entity = Const(lemma)
@@ -335,26 +357,7 @@ def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
                 raise Exception("AppError: Invalid types for function application.")
 
 
-class Node:
-    data: Expr | tuple[Any, Any]
-
-    def __init__(self, data):
-        self.data = data
-
-    def __str__(self):
-        match self.data:
-            case (t, u):
-                return f"[{t}, {u}]"
-            case _:
-                return str(self.data)
-
-
-class Model:
-
-    def __init__(self) -> None:
-        self.entities: set[Entity] = set()                                    # x : e
-        self.unaries: dict[str, dict[Entity, bool]] = dict()                  # λx.P(x)
-        self.binaries: dict[str, dict[Entity, dict[Entity, bool]]] = dict()   # λy.λx.R(x,y)
+class Translator:
 
     def word2lf(self, cat: list[tuple[str,str]], lemma: str = ''):
         match cat:
