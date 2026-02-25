@@ -410,6 +410,28 @@ class Model:
             case _:
                 return None
 
+    def convert(self, dt):
+        """Conversion of derivation-tree into a tree of lambda applications"""
+
+        match dt:
+            case ([entry], cat):
+                _, lemma = entry.split(':')
+                return Node(self.word2lf(cat, lemma.strip()))
+
+            case ([], cat):
+                return Node(self.word2lf(cat))
+
+            case ['*', dt1, dt2]:
+                t1 = self.convert(dt1)
+                t2 = self.convert(dt2)
+                return Node((t1,t2))
+
+            case ['o', dt]:
+                return self.convert(dt)
+
+            case _:
+                raise Exception(f"Invalid format for output list-derivation tree: {dt}")
+
 
 if __name__ == "__main__":
     expr1 = build_quant('a')

@@ -1,23 +1,21 @@
 from lexer import Lexer, Lexicon
 from logic import Model
-from mgtdbp import parse
+from parser import Parser
 
 class SymbolicAI:
 
     def __init__(self): 
-        self.lexicon = Lexicon()
-        self.model = Model()
-        self.lexer = Lexer()
+        self.lexicon: Lexicon = Lexicon()
+        self.parser: Parser = Parser()
+        self.model: Model = Model()
+        self.lexer: Lexer = Lexer()
 
     def run(self, raw_input: str):
-
         lexes = self.lexer.lexify(raw_input)
-        entries = [f"{lex.text}: {lex.lemma}" for lex in lexes]
         self.lexicon.add_lexes(lexes)
-
-        deriv_tree = parse(self.lexicon.lexicon, 'c', -1 * float(1e-10), entries)
-        sem_tree = self.model.convert(deriv_tree)
-        return sem_tree
+        derivation_tree = self.parser.parse(self.lexicon, lexes)
+        semantic_tree = self.model.convert(derivation_tree)
+        return semantic_tree
 
     def repl(self) -> None:
 
@@ -30,5 +28,5 @@ if __name__ == "__main__":
     
     symbolic_ai = SymbolicAI()
     raw_input = "Aristotle is a man"
-    sem_tree = symbolic_ai.run(raw_input)
-    print(sem_tree)
+    semantic_tree = symbolic_ai.run(raw_input)
+    print(semantic_tree)
