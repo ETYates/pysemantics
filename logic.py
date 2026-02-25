@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from collections.abc import Callable
-from typing import get_args
+from typing import get_args, Any
 
 Truth = bool | None
 
@@ -137,7 +137,7 @@ def build_quant(lemma: str) -> Expr:
 
     elif lemma == 'a':
         binder = EXISTS
-        rator  = AND 
+        rator  = AND
 
     elif lemma == 'an':
         binder = EXISTS
@@ -150,7 +150,7 @@ def build_quant(lemma: str) -> Expr:
     expr2: Expr = Pred(term=q, args=[var])
     args: list[Expr] = [expr1, expr2]
     expr: Expr = Op(rator, args)
-    
+
     expr = Bind(binder=binder, var=var, expr=expr)
     expr = Bind(binder=LAMBDA, var=q, expr=expr)
     expr = Bind(binder=LAMBDA, var=p, expr=expr)
@@ -270,13 +270,13 @@ def expr_type(expr: Expr):
 
     if isinstance(expr, Entity):
         return Entity
-    
+
     elif isinstance(expr, Pred):
         return Truth
 
     elif isinstance(expr, Op):
         return Truth
-                
+
     elif isinstance(expr, Bind):
 
         if expr.binder == LAMBDA:
@@ -334,6 +334,19 @@ def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
         case _:
                 raise Exception("AppError: Invalid types for function application.")
 
+
+class Node:
+    data: Expr | tuple[Any, Any]
+
+    def __init__(self, data):
+        self.data = data
+
+    def __str__(self):
+        match self.data:
+            case (t, u):
+                return f"[{t}, {u}]"
+            case _:
+                return str(self.data)
 
 
 class Model:
@@ -396,6 +409,30 @@ class Model:
 
             case _:
                 return None
+
+    def convert(self, dt):
+
+        match dt:
+
+            case ([entry], cat):
+                _, lemma = entry.split(':')
+                lf = self.word2lf(cat, lemma.strip())
+                return Node(lf)
+
+            case ([], cat):
+                lf = self.word2lf(cat)
+                return Node(lf)
+
+            case ['*', dt1, dt2]:
+                t1 = self.convert(dt1)
+                t2 = self.convert(dt2)
+                return Node((t1,t2))
+
+            case ['o', dt]:
+                return self.convert(dt)
+
+            case _:
+                raise Exception(f"Invalid dt format: {dt}")
 
 
 if __name__ == "__main__":
