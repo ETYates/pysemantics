@@ -410,30 +410,6 @@ class Model:
             case _:
                 return None
 
-    def convert(self, dt):
-
-        match dt:
-
-            case ([entry], cat):
-                _, lemma = entry.split(':')
-                lf = self.word2lf(cat, lemma.strip())
-                return Node(lf)
-
-            case ([], cat):
-                lf = self.word2lf(cat)
-                return Node(lf)
-
-            case ['*', dt1, dt2]:
-                t1 = self.convert(dt1)
-                t2 = self.convert(dt2)
-                return Node((t1,t2))
-
-            case ['o', dt]:
-                return self.convert(dt)
-
-            case _:
-                raise Exception(f"Invalid dt format: {dt}")
-
 
 if __name__ == "__main__":
     expr1 = build_quant('a')
