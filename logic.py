@@ -410,7 +410,7 @@ class Model:
             case _:
                 return None
 
-    def convert(self, dt):
+    def translate(self, dt):
         """Conversion of derivation-tree into a tree of lambda applications"""
 
         match dt:
@@ -422,12 +422,12 @@ class Model:
                 return Node(self.word2lf(cat))
 
             case ['*', dt1, dt2]:
-                t1 = self.convert(dt1)
-                t2 = self.convert(dt2)
+                t1 = self.translate(dt1)
+                t2 = self.translate(dt2)
                 return Node((t1,t2))
 
             case ['o', dt]:
-                return self.convert(dt)
+                return self.translate(dt)
 
             case _:
                 raise Exception(f"Invalid format for output list-derivation tree: {dt}")

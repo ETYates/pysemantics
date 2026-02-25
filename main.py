@@ -11,15 +11,19 @@ class SymbolicAI:
         self.lexer: Lexer = Lexer()
 
     def run(self, raw_input: str):
+
         lexes = self.lexer.lexify(raw_input)
         self.lexicon.add_lexes(lexes)
+
         derivation_tree = self.parser.parse(self.lexicon, lexes)
-        semantic_tree = self.model.convert(derivation_tree)
+        semantic_tree = self.model.translate(derivation_tree)
+
         return semantic_tree
 
     def repl(self) -> None:
 
         while (raw_input := input("|- ")) != 'quit':
+
             sem_tree = self.run(raw_input)
             print(sem_tree)
 

@@ -56,11 +56,7 @@ Comments welcome: stabler@ucla.edu
 Modified for py3.1 compatibility by: Erik V Arrieta. || Last modified: 9/15/12
 """
 import sys
-from nltktreeport import (TreeView, Tree, CanvasWidget, TextWidget,
-                AbstractContainerWidget, BoxWidget, OvalWidget, ParenWidget,
-                ScrollWatcherWidget)    #added EA
-
-import heapq_mod    #added EA
+from mgtdbp import heapq_mod    #added EA
 import heapq
 import time
 
