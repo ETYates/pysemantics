@@ -359,7 +359,18 @@ def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
 
 class Translator:
 
-    def word2lf(self, cat: list[tuple[str,str]], lemma: str = ''):
+    def word2lf(self, cat: list[tuple[str,str]], lemma: str = '') -> Expr:
+        """
+        Convert a lemma and category entry to a logical form.
+        
+        args:
+            cat   -- the selectors and base cats for a lexical entry
+            lemma -- the dictionary form of a lexical entry
+
+        return:
+            expr -- logical form in a higher order logical lambda calculus
+                    expression
+        """
         match cat:
             case [('sel', 'd'),('sel', 'd'),('cat', 'v')]:
                 expr = build_binary(lemma)
@@ -411,29 +422,45 @@ class Translator:
                 return expr
 
             case _:
-                return None
+                raise Exception("LF for lexical item is unimplemented.")
 
-    def translate(self, dt):
-        """Conversion of derivation-tree into a tree of lambda applications"""
+    def translate(self, derivation_tree: list | tuple) -> Node:
+        """
+        Converts a derivation-tree into a tree of lambda applications.
 
-        match dt:
+        args: 
+            derivation_tree -- tree (in list data structure) of lexical items.
+                               This is the output of the parser
+
+        returns:
+            node -- converted tree data structure
+            """
+
+        match derivation_tree:
             case ([entry], cat):
                 _, lemma = entry.split(':')
-                return Node(self.word2lf(cat, lemma.strip()))
+                data = self.word2lf(cat, lemma.strip())
+                node = Node(data)
+                return node
 
             case ([], cat):
-                return Node(self.word2lf(cat))
+                data = self.word2lf(cat)
+                node = Node(data)
+                return node
 
             case ['*', dt1, dt2]:
-                t1 = self.translate(dt1)
-                t2 = self.translate(dt2)
-                return Node((t1,t2))
+                node1 = self.translate(dt1)
+                node2 = self.translate(dt2)
+                data = (node1,node2)
+                node = Node(data)
+                return node
 
             case ['o', dt]:
-                return self.translate(dt)
+                node = self.translate(dt)
+                return node
 
             case _:
-                raise Exception(f"Invalid format for output list-derivation tree: {dt}")
+                raise Exception(f"Invalid format for output list-derivation tree: {derivation_tree}")
 
 
 if __name__ == "__main__":
