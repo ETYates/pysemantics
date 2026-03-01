@@ -112,6 +112,8 @@ class Node:
             case _:
                 return str(self.data)
 
+Unary = Callable[[Entity], Truth]
+
 
 class Model:
 
@@ -137,6 +139,7 @@ def build_binary(lemma: str) -> Expr:
 
     term: Entity = Const(lemma)
 
+
     x, y = Var('x'), Var('y')
     args: list[Entity] = [x, y]
     expr: Expr = Pred(term, args)
@@ -151,6 +154,7 @@ def build_quant(lemma: str) -> Expr:
 
     var: Entity = Var('x')
     p: Entity = Var('P')
+
     q: Entity = Var('Q')
 
     if lemma == 'every':
@@ -288,68 +292,38 @@ def subst_expr(v: Var, w: Expr, expr: Expr) -> Expr:
             return expr
 
 
-def expr_type(expr: Expr):
-
-    if isinstance(expr, Entity):
-        return Entity
-
-    elif isinstance(expr, Pred):
-        return Truth
-
-    elif isinstance(expr, Op):
-        return Truth
-
-    elif isinstance(expr, Bind):
-
-        if expr.binder == LAMBDA:
-
-            if isinstance(expr.var, Wff):
-                return Entity
-
-            if isinstance(expr.var, Var):
-                if expr.var.name.islower():
-                    return Callable[[Entity], expr_type(expr.expr)]
-                else:
-                    typ = Callable[[Entity], Truth]
-                    return Callable[[typ], expr_type(expr.expr)]
-
-            elif isinstance(expr.var, Const):
-                if expr.var.name.islower():
-                    return Callable[[Entity], expr_type(expr.expr)]
-                else:
-                    typ = Callable[[Entity], Truth]
-                    return Callable[[typ], expr_type(expr.expr)]
-
-        elif expr.binder == EXISTS:
-            return Truth
-
-        elif expr.binder == FORALL:
-            return Truth
-
-
-def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
+def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr | None:
 
     match exprs:
 
-        case Const(term), Bind('\\', Var(name), expr):
+        case Const(term), Bind(binder=LAMBDA, var=Var(name), expr=expr):
             if name.islower():
                 return subst_terms(Var(name), Const(term), expr)
-            else:
-                raise Exception("AppError: Invalid types for function application.")
 
-        case Bind('\\', Var(name), expr), Const(term):
+        case Bind(binder=LAMBDA, var=Var(name), expr=expr), Const(term):
             if name.islower():
-                print('---')
                 return subst_terms(Var(name), Const(term), expr)
-            else:
-                raise Exception("AppError: Invalid types for function application.")
+
+        case Var(term), Bind(binder=LAMBDA, var=Var(name), expr=expr):
+            if name.islower():
+                return subst_terms(Var(name), Const(term), expr)
+
+        case Bind(binder=LAMBDA, var=Var(name), expr=expr), Var(term):
+            if name.islower():
+                return subst_terms(Var(name), Const(term), expr)
 
         case Bind(binder='\\', var=Var(name1), expr=expr1), Bind(binder='\\', var=Var(name2), expr=expr2):
-            if name1.isupper() and name2.islower() \
-            or name1.islower() and name2.isupper():
+
+            if name1.isupper() and name2.islower():
                 v = Var(name1)
                 w = Bind('\\', Var(name2), expr2)
                 return subst_expr(v, w, expr1)
+
+            elif name1.islower() and name2.isupper():
+                v = Var(name2)
+                w = Bind('\\', Var(name1), expr1)
+                return subst_expr(v, w, expr2)
+
             else:
                 raise Exception(f"AppError: Invalid types for function application: {name1} and {name2}")
 
@@ -464,9 +438,9 @@ class Translator:
 
 
 if __name__ == "__main__":
-    expr1 = build_quant('a')
-    expr2 = build_unary('P')
-    print(expr_type(expr1))
-    print(expr_type(expr2))
-    typ = expr_type(expr1)
-    print(get_args(typ)[0][0])
+    q = build_quant('a')
+    a = Const('a')
+    expr = build_binary('R')
+    expr2 = build_unary('G')
+    expr = beta_reduction((q,expr))
+    print(expr)
