@@ -69,7 +69,7 @@ class Pred(Expr):
 class Bind(Expr):
     """Class to represent lambda statements and quantifiers."""
     binder: str
-    var: Entity
+    var: Var
     expr: Expr
 
     def __str__(self) -> str:
@@ -184,7 +184,7 @@ def build_quant(lemma: str) -> Expr:
     return expr
 
 
-def subst_term(v: Entity,
+def subst_term(v: Var,
                w: Entity,
                term: Entity) -> Entity:
 
@@ -194,8 +194,8 @@ def subst_term(v: Entity,
         return term
 
 
-def alpha_conversion(v: Entity,
-                     w: Entity,
+def alpha_conversion(v: Var,
+                     w: Var,
                      expr: Expr) -> Expr:
     """Implementation of alpha-conversion (variable renaming)"""
     match expr:
@@ -216,7 +216,7 @@ def alpha_conversion(v: Entity,
         case _:
             return expr
 
-
+"""
 def subst_terms(v: Entity,
                 w: Entity,
                 expr: Expr) -> Expr:
@@ -290,39 +290,93 @@ def subst_expr(v: Var, w: Expr, expr: Expr) -> Expr:
 
         case _:
             return expr
+"""
+
+def substitute(v: Var, w: Expr, expr: Expr) -> Expr:
+
+    match expr:
+
+        case Bind(name, var, expr):
+            if var == w:
+                expr = alpha_conversion(var, Var('v'), expr)
+                expr = substitute(v, w, expr)
+                expr = alpha_conversion(Var('v'), v, expr)
+                expr = Bind(name, var, expr)
+                return expr
+            else:
+                expr = substitute(v, w, expr)
+                expr = Bind(name, var, expr)
+                return expr
+
+        case Pred(term, args):
+
+            if v == term:
+                while args:
+                    arg = args.pop(0)
+                    w = beta_reduction((w, arg))
+                return w
+            else:
+                if isinstance(w, Entity):
+                    args = [subst_term(v, w, arg) for arg in args]
+                    expr = Pred(term, args)
+                    return expr
+                else:
+                    return expr
+
+        case Op(name, args):
+            args = [substitute(v, w, expr) for expr in args]
+            expr = Op(name, args)
+            return expr
+
+        case Var():
+            if v == expr:
+                return w
+            else:
+                return expr
+
+        case _:
+            return expr
 
 
-def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr | None:
+def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
 
     match exprs:
 
         case Const(term), Bind(binder=LAMBDA, var=Var(name), expr=expr):
             if name.islower():
-                return subst_terms(Var(name), Const(term), expr)
+                return substitute(Var(name), Const(term), expr)
+            else:
+                raise Exception("AppError: failed beta_reduction")
 
         case Bind(binder=LAMBDA, var=Var(name), expr=expr), Const(term):
             if name.islower():
-                return subst_terms(Var(name), Const(term), expr)
+                return substitute(Var(name), Const(term), expr)
+            else:
+                raise Exception("AppError: failed beta_reduction")
 
         case Var(term), Bind(binder=LAMBDA, var=Var(name), expr=expr):
             if name.islower():
-                return subst_terms(Var(name), Const(term), expr)
+                return substitute(Var(name), Const(term), expr)
+            else:
+                raise Exception("AppError: failed beta_reduction")
 
         case Bind(binder=LAMBDA, var=Var(name), expr=expr), Var(term):
             if name.islower():
-                return subst_terms(Var(name), Const(term), expr)
+                return substitute(Var(name), Const(term), expr)
+            else:
+                raise Exception("AppError: failed beta_reduction")
 
         case Bind(binder='\\', var=Var(name1), expr=expr1), Bind(binder='\\', var=Var(name2), expr=expr2):
 
             if name1.isupper() and name2.islower():
                 v = Var(name1)
                 w = Bind('\\', Var(name2), expr2)
-                return subst_expr(v, w, expr1)
+                return substitute(v, w, expr1)
 
             elif name1.islower() and name2.isupper():
                 v = Var(name2)
                 w = Bind('\\', Var(name1), expr1)
-                return subst_expr(v, w, expr2)
+                return substitute(v, w, expr2)
 
             else:
                 raise Exception(f"AppError: Invalid types for function application: {name1} and {name2}")
@@ -352,7 +406,7 @@ class Translator:
 
             case [('sel', 'j'),('sel', 'd'),('cat', 'v')]:
                 var = Var('P')
-                args: list[Entity] = []
+                args = []
                 name = LAMBDA
                 expr = Pred(term=var, args=args)
                 expr = Bind(name, var, expr)
@@ -439,8 +493,8 @@ class Translator:
 
 if __name__ == "__main__":
     q = build_quant('a')
-    a = Const('a')
-    expr = build_binary('R')
-    expr2 = build_unary('G')
-    expr = beta_reduction((q,expr))
+    expr1 = build_binary('f')
+    expr2 = build_unary('g')
+    expr = beta_reduction((q,expr1))
+    expr = beta_reduction((expr,expr2))
     print(expr)
