@@ -224,12 +224,67 @@ def alpha_conversion(v: Var,
         case _:
             return expr
 
+def lift_bind(expr: Expr) -> Var | None:
+
+    if isinstance(expr, Bind):
+        binder = expr.binder
+        var = expr.var
+        expr = expr.expr
+
+        if binder==LAMBDA:
+            return var
+        else:
+            var = lift_bind(expr)
+            return var
+
+    elif isinstance(expr, Op):
+        args = [lift_bind(arg) for arg in expr.args]
+
+        match args:
+            case [var, _]:
+                return var
+            case [None, var]:
+                return var
+            case _:
+                return None
+    else:
+        return None
+
+def reduce_bind(v: Var, expr: Expr) -> Expr:
+
+    if isinstance(expr, Bind):
+        binder: str = expr.binder
+        w: Var = expr.var
+        new_expr: Expr = expr.expr
+
+        if binder == LAMBDA:
+            if v == w:
+                return new_expr
+            else:
+                new_expr = reduce_bind(v, new_expr)
+                return new_expr
+        else:
+            new_expr = reduce_bind(v, new_expr)
+            new_expr = Bind(binder, w, new_expr)
+            return new_expr
+
+    elif isinstance(expr, Op):
+        rator = expr.rator
+        args = expr.args
+        args = [reduce_bind(v, expr) for expr in args]
+        expr = Op(rator, args)
+        return expr
+
+    else:
+        return expr
+
 
 def substitute(v: Var, w: Expr, expr: Expr) -> Expr:
 
     match expr:
 
         case Bind(name, var, expr):
+
             if var == w:
                 tmp = Var('v')
                 expr = alpha_conversion(var, tmp, expr)
@@ -237,6 +292,7 @@ def substitute(v: Var, w: Expr, expr: Expr) -> Expr:
                 expr = alpha_conversion(tmp, v, expr)
                 expr = Bind(name, v, expr)
                 return expr
+
             else:
                 expr = substitute(v, w, expr)
                 expr = Bind(name, var, expr)
@@ -249,6 +305,7 @@ def substitute(v: Var, w: Expr, expr: Expr) -> Expr:
                     arg = args.pop(0)
                     w = beta_reduction((w, arg))
                 return w
+
             else:
                 if isinstance(w, Entity):
                     args = [subst_term(v, w, arg) for arg in args]
@@ -271,49 +328,96 @@ def substitute(v: Var, w: Expr, expr: Expr) -> Expr:
         case _:
             return expr
 
+def lambda_abstraction(expr: Expr) -> Expr:
+    
+    var_opt = lift_bind(expr)
+
+    if var_opt:
+        var = var_opt
+        expr = reduce_bind(var, expr)
+        binder = LAMBDA
+        
+        expr = Bind(binder, var, expr)
+        return expr
+
+    return expr
+
 
 def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
 
     match exprs:
 
         case Const(term), Bind(binder=LAMBDA, var=Var(name), expr=expr):
+
             if name.islower():
-                return substitute(Var(name), Const(term), expr)
-            else:
-                raise Exception("AppError: failed beta_reduction")
+                v = Var(name)
+                w = Const(term)
+                expr = substitute(v, w, expr)
+                expr = lambda_abstraction(expr)
+                return expr
+
+            raise Exception("AppError: failed beta_reduction")
 
         case Bind(binder=LAMBDA, var=Var(name), expr=expr), Const(term):
+
             if name.islower():
-                return substitute(Var(name), Const(term), expr)
-            else:
-                raise Exception("AppError: failed beta_reduction")
+                v = Var(name)
+                w = Const(term)
+                expr = substitute(v, w, expr)
+                expr = lambda_abstraction(expr)
+                return expr
+
+            raise Exception("AppError: failed beta_reduction")
 
         case Var(term), Bind(binder=LAMBDA, var=Var(name), expr=expr):
+
             if name.islower():
-                return substitute(Var(name), Var(term), expr)
-            else:
-                raise Exception("AppError: failed beta_reduction")
+                v = Var(name)
+                w = Var(term)
+                expr = substitute(v, w, expr)
+                expr = lambda_abstraction(expr)
+                return expr
+
+            raise Exception("AppError: failed beta_reduction")
 
         case Bind(binder=LAMBDA, var=Var(name), expr=expr), Var(term):
+
             if name.islower():
-                return substitute(Var(name), Var(term), expr)
-            else:
-                raise Exception("AppError: failed beta_reduction")
+                v = Var(name)
+                w = Var(term)
+                expr = substitute(v, w, expr)
+                expr = lambda_abstraction(expr)
+                return expr
+
+            raise Exception("AppError: failed beta_reduction")
 
         case Bind(binder='\\', var=Var(name1), expr=expr1), Bind(binder='\\', var=Var(name2), expr=expr2):
 
             if name1.isupper() and name2.islower():
+                binder = '\\'
+                var = Var(name2)
+                expr = expr2
+
                 v = Var(name1)
-                w = Bind('\\', Var(name2), expr2)
-                return substitute(v, w, expr1)
+                w = Bind(binder, var, expr)
+                expr = substitute(v, w, expr1)
+                expr = lambda_abstraction(expr)
+
+                return expr
 
             elif name1.islower() and name2.isupper():
-                v = Var(name2)
-                w = Bind('\\', Var(name1), expr1)
-                return substitute(v, w, expr2)
+                binder = '\\'
+                var = Var(name1)
+                expr = expr1
 
-            else:
-                raise Exception(f"AppError: Invalid types for function application: {name1} and {name2}")
+                v = Var(name2)
+                w = Bind(binder, var, expr)
+                expr = substitute(v, w, expr2)
+                expr = lambda_abstraction(expr)
+
+                return expr
+
+            raise Exception(f"AppError: Invalid types for function application: {name1} and {name2}")
 
         case _:
                 raise Exception("AppError: Invalid types for function application.")
@@ -431,4 +535,5 @@ if __name__ == "__main__":
     expr = beta_reduction((q,expr))
     g = build_unary('g')
     expr = beta_reduction((g,expr))
+    var_opt = lift_bind(expr)
     print(expr)
