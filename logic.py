@@ -356,13 +356,13 @@ def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
 
         case Var(term), Bind(binder=LAMBDA, var=Var(name), expr=expr):
             if name.islower():
-                return substitute(Var(name), Const(term), expr)
+                return substitute(Var(name), Var(term), expr)
             else:
                 raise Exception("AppError: failed beta_reduction")
 
         case Bind(binder=LAMBDA, var=Var(name), expr=expr), Var(term):
             if name.islower():
-                return substitute(Var(name), Const(term), expr)
+                return substitute(Var(name), Var(term), expr)
             else:
                 raise Exception("AppError: failed beta_reduction")
 
@@ -493,8 +493,6 @@ class Translator:
 
 if __name__ == "__main__":
     q = build_quant('a')
-    expr1 = build_binary('f')
-    expr2 = build_unary('g')
-    expr = beta_reduction((q,expr1))
-    expr = beta_reduction((expr,expr2))
+    expr = build_binary('f')
+    expr = beta_reduction((q,expr))
     print(expr)
