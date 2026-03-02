@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from collections.abc import Callable
-from typing import get_args, Any
+from typing import Any
 
 Truth = bool | None
 
@@ -193,6 +193,14 @@ def subst_term(v: Var,
     else:
         return term
 
+def subst_var(v: Var,
+              w: Var,
+              var: Var) -> Var:
+
+    if v == var:
+        return w
+    else:
+        return var
 
 def alpha_conversion(v: Var,
                      w: Var,
@@ -201,7 +209,7 @@ def alpha_conversion(v: Var,
     match expr:
 
         case Bind(name, var, expr):
-            var = subst_term(v, w, var)
+            var = subst_var(v, w, var)
             expr = alpha_conversion(v, w, expr)
             return Bind(name, var, expr)
 
@@ -216,81 +224,6 @@ def alpha_conversion(v: Var,
         case _:
             return expr
 
-"""
-def subst_terms(v: Entity,
-                w: Entity,
-                expr: Expr) -> Expr:
-    match expr:
-
-        case Op(name, args):
-            args = [subst_terms(v, w, expr) for expr in args]
-            return Op(name, args)
-
-        case Bind(name, var, expr):
-
-            if var == w:
-                expr = alpha_conversion(var, Var('v'), expr)
-                expr = subst_terms(v, w, expr)
-                expr = alpha_conversion(Var('v'), v, expr)
-                return Bind(name, var, expr)
-            else:
-                var = subst_term(v, w, var)
-                expr = subst_terms(v, w, expr)
-                return Bind(name, var, expr)
-
-        case Pred(name, args):
-            args = [subst_term(v,
-                               w,
-                               term) for term in args]
-            return Pred(name, args)
-
-        case Entity():
-            return subst_term(v, w, expr)
-
-        case _:
-            return expr
-
-
-def subst_expr(v: Var, w: Expr, expr: Expr) -> Expr:
-
-    match expr:
-
-        case Bind(name, var, expr):
-            expr = subst_expr(v, w, expr)
-            return Bind(name, var, expr)
-
-        case Pred(name, args):
-
-            if v == name:
-
-                match args:
-                    case [arg]:
-                        return beta_reduction((w, arg))
-                    case [arg1, arg2]:
-                        w_prime = beta_reduction((w, arg1))
-                        return beta_reduction((w_prime, arg2))
-                    case _:
-                        raise Exception("Invalid arity for predicate in expression substitution.")
-            else:
-                return expr
-
-        case Op(name, args):
-            args = [subst_expr(v, w, expr) for expr in args]
-            return Op(name, args)
-
-        case Wff(expr):
-            expr = subst_expr(v, w, expr)
-            return Wff(expr)
-
-        case Entity():
-           if v == expr:
-               return w
-           else:
-               return expr
-
-        case _:
-            return expr
-"""
 
 def substitute(v: Var, w: Expr, expr: Expr) -> Expr:
 
@@ -298,10 +231,11 @@ def substitute(v: Var, w: Expr, expr: Expr) -> Expr:
 
         case Bind(name, var, expr):
             if var == w:
-                expr = alpha_conversion(var, Var('v'), expr)
+                tmp = Var('v')
+                expr = alpha_conversion(var, tmp, expr)
                 expr = substitute(v, w, expr)
-                expr = alpha_conversion(Var('v'), v, expr)
-                expr = Bind(name, var, expr)
+                expr = alpha_conversion(tmp, v, expr)
+                expr = Bind(name, v, expr)
                 return expr
             else:
                 expr = substitute(v, w, expr)
@@ -495,4 +429,6 @@ if __name__ == "__main__":
     q = build_quant('a')
     expr = build_binary('f')
     expr = beta_reduction((q,expr))
+    g = build_unary('g')
+    expr = beta_reduction((g,expr))
     print(expr)
