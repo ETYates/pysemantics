@@ -96,7 +96,13 @@ class Op(Expr):
             return f"{rator.join([str(arg) for arg in self.args])}"
 
         else:
-            raise Exception("ArityError: Invalid arity for predicate.")
+            raise Exception(f"ArityError: Invalid arity for predicate: {len(self.args)}.")
+
+@dataclass
+class Epsilon(Expr):
+
+    def __str__(self) -> str:
+        return "null"
 
 
 class Node:
@@ -224,31 +230,6 @@ def alpha_conversion(v: Var,
         case _:
             return expr
 
-def lift_bind(expr: Expr) -> Var | None:
-
-    if isinstance(expr, Bind):
-        binder = expr.binder
-        var = expr.var
-        expr = expr.expr
-
-        if binder==LAMBDA:
-            return var
-        else:
-            var = lift_bind(expr)
-            return var
-
-    elif isinstance(expr, Op):
-        args = [lift_bind(arg) for arg in expr.args]
-
-        match args:
-            case [var, _]:
-                return var
-            case [None, var]:
-                return var
-            case _:
-                return None
-    else:
-        return None
 
 def reduce_bind(v: Var, expr: Expr) -> Expr:
 
@@ -278,6 +259,47 @@ def reduce_bind(v: Var, expr: Expr) -> Expr:
     else:
         return expr
 
+def free_vars(expr: Expr) -> list[Var]:
+    
+    vs: list[Var] = []
+
+    if isinstance(expr, Bind):
+
+        if expr.binder == LAMBDA:
+            var = expr.var
+            expr = expr.expr
+
+            vs.append(var)
+            vs.extend(free_vars(expr))
+            return vs
+
+        else:
+            expr = expr.expr
+            vs.extend(free_vars(expr))
+            return vs
+
+    elif isinstance(expr, Op):
+
+        args = expr.args
+
+        for arg in args:
+            new_vs = free_vars(arg)
+            vs.extend(new_vs)
+
+        return vs
+
+    return vs
+
+
+def lift_binds(expr: Expr) -> Expr:
+    vs = free_vars(expr)
+
+    for var in vs:
+        expr = reduce_bind(var, expr)
+        expr = Bind(LAMBDA, var, expr)
+
+    return expr
+        
 
 def substitute(v: Var, w: Expr, expr: Expr) -> Expr:
 
@@ -328,20 +350,6 @@ def substitute(v: Var, w: Expr, expr: Expr) -> Expr:
         case _:
             return expr
 
-def lambda_abstraction(expr: Expr) -> Expr:
-    
-    var_opt = lift_bind(expr)
-
-    if var_opt:
-        var = var_opt
-        expr = reduce_bind(var, expr)
-        binder = LAMBDA
-        
-        expr = Bind(binder, var, expr)
-        return expr
-
-    return expr
-
 
 def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
 
@@ -353,7 +361,7 @@ def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
                 v = Var(name)
                 w = Const(term)
                 expr = substitute(v, w, expr)
-                expr = lambda_abstraction(expr)
+                expr = lift_binds(expr)
                 return expr
 
             raise Exception("AppError: failed beta_reduction")
@@ -364,7 +372,7 @@ def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
                 v = Var(name)
                 w = Const(term)
                 expr = substitute(v, w, expr)
-                expr = lambda_abstraction(expr)
+                expr = lift_binds(expr)
                 return expr
 
             raise Exception("AppError: failed beta_reduction")
@@ -375,7 +383,7 @@ def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
                 v = Var(name)
                 w = Var(term)
                 expr = substitute(v, w, expr)
-                expr = lambda_abstraction(expr)
+                expr = lift_binds(expr)
                 return expr
 
             raise Exception("AppError: failed beta_reduction")
@@ -386,7 +394,7 @@ def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
                 v = Var(name)
                 w = Var(term)
                 expr = substitute(v, w, expr)
-                expr = lambda_abstraction(expr)
+                expr = lift_binds(expr)
                 return expr
 
             raise Exception("AppError: failed beta_reduction")
@@ -401,7 +409,7 @@ def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
                 v = Var(name1)
                 w = Bind(binder, var, expr)
                 expr = substitute(v, w, expr1)
-                expr = lambda_abstraction(expr)
+                expr = lift_binds(expr)
 
                 return expr
 
@@ -413,14 +421,21 @@ def beta_reduction(exprs: tuple[Expr, Expr]) -> Expr:
                 v = Var(name2)
                 w = Bind(binder, var, expr)
                 expr = substitute(v, w, expr2)
-                expr = lambda_abstraction(expr)
+                expr = lift_binds(expr)
 
                 return expr
 
             raise Exception(f"AppError: Invalid types for function application: {name1} and {name2}")
+        
+        case expr1, expr2:
 
-        case _:
-                raise Exception("AppError: Invalid types for function application.")
+            if isinstance(expr1, Epsilon):
+                return expr2
+
+            elif isinstance(expr2, Epsilon):
+                return expr1
+
+            raise Exception(f"AppError: Invalid types for function application: {expr1} and {expr2}.")
 
 
 class Translator:
@@ -510,7 +525,7 @@ class Translator:
                 return node
 
             case ([], cat):
-                data = self.word2lf(cat)
+                data = Epsilon()
                 node = Node(data)
                 return node
 
@@ -528,12 +543,32 @@ class Translator:
             case _:
                 raise Exception(f"Invalid format for output list-derivation tree: {derivation_tree}")
 
+    def simplify(self, node: Node) -> Expr:
+        
+        data = node.data
+        
+        if isinstance(data, Expr):
+            expr = data
+            return expr
+
+        else:
+            n1, n2 = data
+
+            expr1 = self.simplify(n1)
+            expr2 = self.simplify(n2)
+            
+            expr = beta_reduction((expr1,expr2))
+            return expr
+
 
 if __name__ == "__main__":
     q = build_quant('a')
-    expr = build_binary('f')
-    expr = beta_reduction((q,expr))
-    g = build_unary('g')
+    g = build_binary('g')
+    f = build_unary('f')
+    a = Const('a')
+    expr = beta_reduction((q,f))
     expr = beta_reduction((g,expr))
-    var_opt = lift_bind(expr)
+    print(expr)
+    print(free_vars(expr))
+    expr = beta_reduction((expr,a))
     print(expr)

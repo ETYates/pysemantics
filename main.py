@@ -18,20 +18,21 @@ class SymbolicAI:
 
         derivation_tree = self.parser.parse(self.lexicon, lexes)
         semantic_tree = self.translator.translate(derivation_tree)
+        expression = self.translator.simplify(semantic_tree)
 
-        return semantic_tree
+        return expression
 
     def repl(self) -> None:
 
         while (raw_input := input("|- ")) != 'quit':
 
-            sem_tree = self.run(raw_input)
-            print(sem_tree)
+            expression = self.run(raw_input)
+            print(expression)
 
 
 if __name__ == "__main__":
     
     symbolic_ai = SymbolicAI()
     raw_input = "Aristotle is a man"
-    semantic_tree = symbolic_ai.run(raw_input)
-    print(semantic_tree)
+    expr = symbolic_ai.run(raw_input)
+    print(expr)
