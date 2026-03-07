@@ -1,26 +1,31 @@
-from lexer import Lexer, Lexicon
-from logic import Model, Translator
-from parser import Parser
+from logic import Logic, Expr, Model
+from parse import Parser
+
+import warnings
 
 class SymbolicAI:
 
     def __init__(self): 
-        self.lexicon: Lexicon = Lexicon()
         self.parser: Parser = Parser()
         self.model: Model = Model()
-        self.lexer: Lexer = Lexer()
-        self.translator = Translator()
+        self.logic: Logic = Logic()
 
     def run(self, raw_input: str):
+        trees, lemmas = self.parser.parse(raw_input)
+        exprs: list[Expr] = []
+        for tree in trees:
+            expr = self.logic.denotation(tree, lemmas)
+            exprs.append(expr)
 
-        lexes = self.lexer.lexify(raw_input)
-        self.lexicon.add_lexes(lexes)
+        expr = exprs[0]
 
-        derivation_tree = self.parser.parse(self.lexicon, lexes)
-        semantic_tree = self.translator.translate(derivation_tree)
-        expression = self.translator.simplify(semantic_tree)
+        if len(exprs) > 1:
+            warnings.warn("Ambiguous sentence: tree arbitrarily selected.", SyntaxWarning)
 
-        return expression
+        return expr
+        # value = self.model.evaluate(expr)
+
+        # return value
 
     def repl(self) -> None:
 
@@ -33,6 +38,7 @@ class SymbolicAI:
 if __name__ == "__main__":
     
     symbolic_ai = SymbolicAI()
-    raw_input = "Aristotle is a man"
-    expr = symbolic_ai.run(raw_input)
-    print(expr)
+    # raw_input = "Aristotle is a man"
+    # expr = symbolic_ai.run(raw_input)
+    # print(expr)
+    symbolic_ai.repl()
