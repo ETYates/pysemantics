@@ -109,20 +109,6 @@ class Epsilon(Expr):
     def __str__(self) -> str:
         return "null"
 
-
-class Node:
-    data: Expr | tuple[Any, Any]
-
-    def __init__(self, data):
-        self.data = data
-
-    def __str__(self):
-        match self.data:
-            case (t, u):
-                return f"[{t}, {u}]"
-            case _:
-                return str(self.data)
-
 Unary = Callable[[Entity], Truth]
 
 class Model:
@@ -196,7 +182,7 @@ class Logic:
             binder = FORALL
             rator  = IFTHEN
 
-        elif lemma == 'a':
+        elif lemma == 'a' or lemma  == 'some':
             binder = EXISTS
             rator  = AND
 
