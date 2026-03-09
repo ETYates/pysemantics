@@ -6,7 +6,6 @@ from collections.abc import Callable
 from collections import defaultdict
 
 from dataclasses import dataclass
-from typing import Any
 
 Truth = bool | None
 
@@ -30,11 +29,20 @@ class Expr:
 
 @dataclass
 class Entity(Expr):
+    r"""
+    Variables and constants for predicates of the type
+    \x.f(x) or \y.\x.g(x,y). Not intended to be instantiated 
+    itself but only through inheritace in classes Const and 
+    Var.
+    """
     ...
 
 
 @dataclass
 class Const(Entity):
+    """
+    Constant entities, i.e. a named entity.
+    """
     name: str
 
     def __str__(self):
@@ -43,6 +51,9 @@ class Const(Entity):
 
 @dataclass
 class Var(Entity):
+    """
+    Variable entity, represented by x, y, or z.
+    """
     name: str
 
     def __str__(self):
@@ -51,6 +62,10 @@ class Var(Entity):
 
 @dataclass
 class Wff(Entity):
+    """
+    A "well-formed-formula" for use in iota statements, which
+    are expressions that evaluate to an Entity type.
+    """
     expr: Expr
 
     def __str__(self):
@@ -105,6 +120,9 @@ class Op(Expr):
 
 @dataclass
 class Epsilon(Expr):
+    """
+    Null expression.
+    """
 
     def __str__(self) -> str:
         return "null"
@@ -112,6 +130,11 @@ class Epsilon(Expr):
 Unary = Callable[[Entity], Truth]
 
 class Model:
+    """
+    Mathematical structure for representing the values set for predicates
+    through declarative sentences. This is used to evaluate expressions
+    for Truth-Value, or to answer queries.
+    """
 
     def __init__(self) -> None:
         self.entities: set[Entity] = set()                                    # x : e
@@ -119,13 +142,33 @@ class Model:
         self.binaries: dict[str, dict[Entity, dict[Entity, bool]]] = dict()   # λy.λx.R(x,y)
 
 class Lemmas:
-
+    """
+    A helper class meant to assist in the creation of expressions. Given that
+    English words often have verbal or plural suffixes, we need to be sure to
+    lemmatize all the words in the sentence in order that words with the same
+    lemma will recieve the same logical predicative symbol in the model,
+    despite their textual strings being distinct. The challenge with this 
+    implementation is due to the fact that the nltk chart-parser doesn't allow
+    for the lemmas to be carried into the parser tree for subsequent analysis.
+    In order to get around this it is necessary to create a temporary lemmatizer
+    for each sentence using the respective token, tag, and lemma that is produced
+    by the output of the spacy analyzer. 
+    """
     entries = defaultdict(set)
 
     def add_lemma(self,
                   word: str, 
                   cat: str, 
                   lemma: str) -> None:
+        """
+        Adds a tuple of a word form and its respective part-of-speech
+        category to the dictionary and assigns the respective lemma as the
+        value to the tuple key.
+
+        :param word: input string of the actual word in the sentence
+        :param cat: nonterminal symbol for the word in the grammar
+        :param lemma: respective lemma string for word and cat
+        """
 
         key = (word, cat)
         self.entries[key].add(lemma)
@@ -134,19 +177,32 @@ class Lemmas:
                    words: list[str],
                    cats: list[str],
                    lemmas: list[str]) -> None:
+        """
+        Adds multiple lemmas to the temporary lemmatizer. Wrapper for the above method.
+        """
 
         for word, cat, lemma in zip(words, cats, lemmas):
             self.add_lemma(word, cat, lemma)
     
     def __getitem__(self, key: tuple[str,str]) -> str:
-        lemma = self.entries[key].pop()
+        """
+        Standard dunder method to allow hashing with brackets.
+        """
 
+        lemma = self.entries[key].pop()
         return lemma
     
 
 class Logic:
+    """
+    Contains methods for building and manipulating lambda expressions of the
+    types defined above. 
+    """
 
     def _build_unary(self, lemma: str) -> Expr:
+        """
+
+        """
 
         term: Entity = Const(lemma)
         var = Var('x')
