@@ -254,9 +254,9 @@ class Logic:
 
         \P.\Q.#x.[P(x) & Q(x)]: ((e -> t) -> ((e -> t) -> t))
 
-        Definite articles
-        produce expressions in the form of iota-bindings that indicate definite
-        description in the form specified by Bertrand Russell:
+        Definite articles produce expressions in the form of iota-bindings that
+        indicate definite description in the form specified by Bertrand
+        Russell:
 
         ~x.f(x) : e
 
