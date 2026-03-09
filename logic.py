@@ -147,12 +147,13 @@ class Lemmas:
     English words often have verbal or plural suffixes, we need to be sure to
     lemmatize all the words in the sentence in order that words with the same
     lemma will recieve the same logical predicative symbol in the model,
-    despite their textual strings being distinct. The challenge with this 
-    implementation is due to the fact that the nltk chart-parser doesn't allow
-    for the lemmas to be carried into the parser tree for subsequent analysis.
-    In order to get around this it is necessary to create a temporary lemmatizer
-    for each sentence using the respective token, tag, and lemma that is produced
-    by the output of the spacy analyzer. 
+    despite their textual strings being distinct. 
+
+    The challenge with this implementation is due to the fact that the nltk
+    chart-parser doesn't allow for the lemmas to be carried into the parser
+    tree for subsequent analysis. In order to get around this it is necessary
+    to create a temporary lemmatizer for each sentence using the respective
+    token, tag, and lemma that is produced by the output of the spacy analyzer. 
     """
     entries = defaultdict(set)
 
@@ -196,7 +197,14 @@ class Lemmas:
 class Logic:
     """
     Contains methods for building and manipulating lambda expressions of the
-    types defined above. 
+    types defined above. This logical system is based on those outlined in
+    the book "Invitation to Formal Semantics" by Cappock and Champollion. 
+
+    Essentially this class implements predicate logic with lambdas and higher
+    order functions. The basic types are entities of type "e" and truth-value
+    (basically a boolean) of type "t". Predicates are functions taking entities
+    as input expressions and return truth-values retrieved from analysis of
+    a model (being a mathematical structure).
     """
 
     def _build_unary(self, lemma: str) -> Expr:
@@ -303,7 +311,7 @@ class Logic:
         Creates an expression for representing the semantic value of the verb
         "to be" which is of the value and type:
 
-        \P.P
+        \P.P : ((e -> t) -> (e -> t))
 
         This is simply an identity function for predicates that is used to
         apply predicates in object position to the subject.
@@ -467,6 +475,8 @@ class Logic:
         the topmost level of the syntax tree of the expression. For example:
 
         lift(@x[f(x) & \y.g(y,x)]) -> \y.@x[f(x) & g(y,x)] 
+
+        :param expr: input expression
         """
         vs = self._free_vars(expr)
 
@@ -480,6 +490,17 @@ class Logic:
                    v: Var, 
                    w: Expr, 
                    expr: Expr) -> Expr:
+        r"""
+        Given an input expression E, return E with all instances of the
+        variable v replaced with the expression w. In symbolic terms it
+        would be written:
+
+        E[v := w]
+
+        :param v: input variable
+        :param w: input expression 
+        :return expr: output expression
+        """
 
         match expr:
 
@@ -529,6 +550,14 @@ class Logic:
                 return expr
 
     def modify(self, expr1: Expr, expr2: Expr) -> Expr:
+        r"""
+        Given two predicates \x.f(x) and \x.g(x) return an expression of the
+        form \x.[f(x) & g(x)]
+
+        :param expr1: input expression
+        :param expr2: input expression
+        :return expr: output expr
+        """
 
         p = Pred(Var('P'), [Var('x')])
         q = Pred(Var('Q'), [Var('x')])
@@ -542,6 +571,14 @@ class Logic:
         return self.beta_reduction((expr2, expr))
 
     def beta_reduction(self, exprs: tuple[Expr, Expr]) -> Expr:
+        r"""
+        Main function for application of lambda expressions. For example:\
+
+        \x.f(x)(a) -> f(x)
+        \y.\x.g(x,y)(b)(a) -> g(a,b)
+
+        :param exprs: input expressions in the form of (Expr, Expr)
+        """
 
         # for expr in exprs:
         #     print(expr)
@@ -635,6 +672,13 @@ class Logic:
                    cat: str, 
                    lemma: str, 
                    arity: int = 2):
+        """
+        Given a category, lemma, and arity, build the appropriate expression
+
+        :param cat: nonterminal category 
+        :param lemma: lemma for word (used for predicate symbold)
+        :param arity: for indicating the transitivity of a verb
+        """
 
         match cat:
 
@@ -666,6 +710,14 @@ class Logic:
                    symbol: str, 
                    tree: str | Tree,
                    lemmas: dict[tuple[str, str], str]) -> Expr:
+        """
+        Function for processing trees which could either be an nltk.Tree object
+        or alternatively just a string.
+
+        :param symbol: non-terminal symbol
+        :param tree: input syntactic tree
+        :param lemmas: lemma dictionary for sentence
+        """
 
         if isinstance(tree, str):
             token = tree
@@ -679,6 +731,16 @@ class Logic:
             return expr
 
     def _object_phrase(self, tree: Tree, lemmas) -> Expr:
+        """
+        A method for calculating the semantic expression of a tree in object
+        position. When the main verb is the copula "to be" it is often
+        necessary to discard the semantic value of the article of type D in
+        order to correctly perform beta-reductions. For example:
+
+        'Aristotle is a man' -> man(Aristotle)
+
+        :param tree: input syntactic tree
+        """
 
         children: list[Tree] = [child for child in tree]
         symbols: list[str] = [self._get_symbol(tree) for tree in children]
@@ -704,6 +766,12 @@ class Logic:
             raise ValueError("incorrect types for object phrase of copula.")
 
     def _get_symbol(self, tree: Tree | str) -> str:
+        """
+        Given an input tree, return the symbol that represents the syntactic
+        type of the tree, which is a non-terminal symbol.
+
+        :param tree: input syntactic tree
+        """
 
         if isinstance(tree, Tree):
             key = Feature('type')
@@ -716,6 +784,16 @@ class Logic:
         return symbol
 
     def _get_terminal(self, tree: Tree) -> str:
+        """
+        Given a tree, check if it a tree that has a single terminal symbol as
+        its child. This applies to rules of the type nonterminal -> [terminal].
+        For example:
+
+        N -> 'man'
+        V -> 'walks'
+
+        :param tree: input tree
+        """
 
         children = [t for t in tree]
         if len(children) == 1:
@@ -727,6 +805,14 @@ class Logic:
     def denotation(self, 
                    tree: Tree, 
                    lemmas: dict[tuple[str,str], str]) -> Expr:
+        """
+        Given an input tree and a dictionary containing the form-lemma
+        correspondences present in the current sentence, translate the
+        syntactic tree into an semantic expression tree.
+
+        :param tree: input tree
+        :param lemmas: lemma dictionary
+        """
 
         symbol = self._get_symbol(tree)
         children: list[Tree] = [child for child in tree]
