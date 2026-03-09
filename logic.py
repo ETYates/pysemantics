@@ -427,7 +427,7 @@ class Logic:
         vs.reverse()
         return vs
 
-    def _reduce_bind(self, 
+    def eta_reduction(self, 
                     v: Var, 
                     expr: Expr) -> Expr:
         r"""
@@ -450,18 +450,18 @@ class Logic:
                 if v == w:
                     return new_expr
                 else:
-                    new_expr = self._reduce_bind(v, new_expr)
+                    new_expr = self.eta_reduction(v, new_expr)
                     new_expr = Bind(binder, w, new_expr)
                     return new_expr
             else:
-                new_expr = self._reduce_bind(v, new_expr)
+                new_expr = self.eta_reduction(v, new_expr)
                 new_expr = Bind(binder, w, new_expr)
                 return new_expr
 
         elif isinstance(expr, Op):
             rator = expr.rator
             args = expr.args
-            args = [self._reduce_bind(v, expr) for expr in args]
+            args = [self.eta_reduction(v, expr) for expr in args]
             expr = Op(rator, args)
             return expr
 
@@ -481,7 +481,7 @@ class Logic:
         vs = self._free_vars(expr)
 
         for var in vs:
-            expr = self._reduce_bind(var, expr)
+            expr = self.eta_reduction(var, expr)
             expr = Bind(LAMBDA, var, expr)
 
         return expr
