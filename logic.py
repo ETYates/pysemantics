@@ -200,8 +200,12 @@ class Logic:
     """
 
     def _build_unary(self, lemma: str) -> Expr:
-        """
+        r"""
+        Construct a predicate of the form:
 
+        \x.f(x) : e -> t
+
+        :param lemma: string used to create the predicate symbol.
         """
 
         term: Entity = Const(lemma)
@@ -214,6 +218,13 @@ class Logic:
         return expr
 
     def _build_binary(self, lemma: str) -> Expr:
+        r"""
+        Creates an expression of the form and type:
+
+        \y.\x.f(x,y) : e -> (e -> t)
+
+        :param lemma: string used to create the predicate symbol.
+        """
 
         term: Entity = Const(lemma)
 
@@ -228,6 +239,33 @@ class Logic:
         return expr
 
     def _build_quant(self, lemma: str) -> Expr:
+        r"""
+        Returns possible generalized quantifier expressions depending on which
+        lemma is passed as input. For example, indefinite articles produce
+        expression of the following form and type:
+
+        \P.\Q.#x.[P(x) & Q(x)]: ((e -> t) -> ((e -> t) -> t))
+
+        Definite articles
+        produce expressions in the form of iota-bindings that indicate definite
+        description in the form specified by Bertrand Russell:
+
+        ~x.f(x) : e
+
+        This means that there is a single x that satisfies the predicate f, and
+        this expression evaluates to the value of an entity. As a result, iota
+        expressions can occur within the arguments of a predicate such as:
+
+        f(~x.g(x)) : t
+
+        The implementation of this function is currently naive because it relies
+        on the individual specification of lemmas within the program logic, which
+        is not extensible to the many more determiners of different values that
+        will be added in the future.
+
+        TODO: create a lexicon of logical expressions for closed grammatical
+        classes such as prepositions and determiners.
+        """
 
         var: Entity = Var('x')
         p: Entity = Var('P')
@@ -261,6 +299,16 @@ class Logic:
         return expr
 
     def _build_copula(self) -> Expr:
+        r"""
+        Creates an expression for representing the semantic value of the verb
+        "to be" which is of the value and type:
+
+        \P.P
+
+        This is simply an identity function for predicates that is used to
+        apply predicates in object position to the subject.
+
+        """
 
         var = Var('P')
         expr = Pred(term=var, args=[])
@@ -271,6 +319,14 @@ class Logic:
                    v: Var,
                    w: Entity,
                    term: Entity) -> Entity:
+        """
+        Given a variable, an entity, and another input entity, return the 
+        entity if the variable matches the term entity.
+
+        :param v: variable 
+        :param w: entity, either a constant, variable, or expression of the type e
+        :param term: a constant or a variable
+        """
 
         if v == term:
             return w
@@ -281,6 +337,13 @@ class Logic:
                   v: Var,
                   w: Var,
                   var: Var) -> Var:
+        """
+        Substitutes v for w, or else if an identity function
+
+        :param v: input variable
+        :param w: input variable
+        :param var: input variable
+        """
 
         if v == var:
             return w
@@ -291,7 +354,15 @@ class Logic:
                          v: Var,
                          w: Var,
                          expr: Expr) -> Expr:
-        """Implementation of alpha-conversion (variable renaming)"""
+        r"""
+        Implementation of alpha-conversion (variable renaming). For example, if
+        alpha-conversion were applied to the predicate \x.f(x), with the input
+        variables x and y, the function would return the expression \y.f(y)
+        
+        :param v: input variable
+        :param w: input variable
+        :param expr: input expression
+        """
         match expr:
 
             case Bind(name, var, expr):
@@ -311,6 +382,16 @@ class Logic:
                 return expr
 
     def _free_vars(self, expr: Expr) -> list[Var]:
+        r"""
+        Given an expression, return a list of all variables that occur in a
+        lambda abtraction. For example:
+
+        free_vars(\x.f(x)) -> [x]
+        free_vars(\y.\x.g(x,y) -> [x,y]
+        free_vars(\z.\y.\x.h(x,y,z) -> [x,y,z]
+
+        :param expr: input expression
+        """
         
         vs: list[Var] = []
 
@@ -341,6 +422,16 @@ class Logic:
     def _reduce_bind(self, 
                     v: Var, 
                     expr: Expr) -> Expr:
+        r"""
+        Given an input variable and expression, remove all bindings in which
+        the variable occurs in a lambda-abstraction. This is similar to naive
+        eta-reduction. For example:
+
+        reduce_bind(x, \x.f(x)) -> f(x)
+
+        :param v: input variable
+        :param expr: 
+        """
 
         if isinstance(expr, Bind):
             binder: str = expr.binder
@@ -370,6 +461,13 @@ class Logic:
             return expr
 
     def _lift_binds(self, expr: Expr) -> Expr:
+        r"""
+        Given an input expression, find all bindings of lambda-abstractions
+        which occur which other expressions, and move those lambda bindings to
+        the topmost level of the syntax tree of the expression. For example:
+
+        lift(@x[f(x) & \y.g(y,x)]) -> \y.@x[f(x) & g(y,x)] 
+        """
         vs = self._free_vars(expr)
 
         for var in vs:
