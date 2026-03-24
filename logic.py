@@ -13,6 +13,8 @@ LAMBDA = '\\'
 EXISTS = '#'
 FORALL = '@'
 IOTA = '~'
+QUEST = '?'
+
 IFTHEN = '->'
 AND = '&'
 OR = '|'
@@ -689,7 +691,16 @@ class Logic:
                 return self._build_quant(lemma)
 
             case 'DP':
-                return Const(lemma)
+                if lemma == 'who' or lemma == 'what':
+                    x = Var('x')
+                    p = Var('P')
+                    pred = Pred(p, [x])
+                    expr = Bind(QUEST, x, pred)
+                    expr = Bind(LAMBDA, p, expr)
+                    return expr
+                
+                else:
+                    return Const(lemma)
 
             case 'V':
 

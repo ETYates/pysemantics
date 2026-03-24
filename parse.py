@@ -35,20 +35,21 @@ class Grammar:
     grammar object and a parser.
     """
 
-    start = 'CP'
+    start = 'S'
 
     basis = """
-        CP -> DP[-wh] TP/?x[-wh]
-        CP -> DP[+wh] TP/?x[+wh]
-        CP -> C TP
-        TP/?x[+wh] -> T[-empty] vP/?x[+wh]
-        TP/?x[-wh] -> T vP/?x[-wh]
-        TP -> T[-empty] vP[+inv]
-        vP/?x[+wh] -> DP/DP[+wh] VP
-        vP/?x[-wh] -> DP/DP[-wh] VP
-        vP/?x[+wh] -> DP[-wh] VP/?x[+wh]
-        vP[+inv] -> DP[-wh] VP
+        S -> CP PUNC
+        CP -> T TP/?x
+            | V TP/?x
+            | DP TP/?x
+        TP/?x -> T vP/?x
+               | T/T vP
+        vP/?x -> DP/DP VP
+               | DP VP/?x
+        vP -> DP VP
         VP/?x[+wh] -> V DP/DP[+wh]
+        VP/?x -> V/V A
+               | V/V DP
         VP -> V DP
             | V CP
             | V A
@@ -61,7 +62,9 @@ class Grammar:
             | NP PP
         DP/DP[+wh] ->
         DP/DP[-wh] ->
-        T[+empty] ->
+        V/V ->
+        T ->
+        T/T ->
         PP -> P DP
         C ->
     """
@@ -75,7 +78,8 @@ class Grammar:
         'DET': 'D',
         'VERB': 'V', 
         'PROPN': 'DP[-wh]',
-        'WP': 'DP[+wh]'
+        'WP': 'DP[+wh]',
+        'PUNCT': 'PUNC'
     } 
 
     copula = ['am', 'is', 'are', 'was', 'were', 'been']
@@ -96,10 +100,9 @@ class Grammar:
             symbols for adding words to production rules
         """
         for tag, token in zip(tags, tokens):
-            terminal = f"'{token}'"
             if token in self.copula:
-                self._add_rule('V', terminal)
-            self._add_rule(tag, terminal)
+                self._add_rule('V', token)
+            self._add_rule(tag, token)
 
     def export_parser(self) -> FeatureChartParser:
         """
@@ -175,7 +178,8 @@ class Grammar:
         :param token: the string of the word to be added as a
             terminal symbol
         """
-        self._rules[cat].add((token,))
+        terminal = f"'{token}'"
+        self._rules[cat].add((terminal,))
         
     def _check_symbol(self, symbol: str) -> str | FeatStructNonterminal:
         """Checks a given symbol string against a list containing all the
