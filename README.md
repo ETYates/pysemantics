@@ -28,10 +28,8 @@ The interpreter can reason with syllogisms:
 ```
 |> Socrates is a man.
 |> Every man is mortal.
-|> Is Socrates mortal?
-Yes
 |> Who is mortal?
-Socrates
+[Socrates]
 ```
 
 Additionally, it is possible to reference entities with definite description.
