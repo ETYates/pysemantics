@@ -7,6 +7,8 @@ from collections import defaultdict
 
 from dataclasses import dataclass
 
+from parse import Node
+
 Truth = bool | None
 
 LAMBDA = '\\'
@@ -130,18 +132,6 @@ class Epsilon(Expr):
         return "null"
 
 Unary = Callable[[Entity], Truth]
-
-class Model:
-    """
-    Mathematical structure for representing the values set for predicates
-    through declarative sentences. This is used to evaluate expressions
-    for Truth-Value, or to answer queries.
-    """
-
-    def __init__(self) -> None:
-        self.entities: set[Entity] = set()                                    # x : e
-        self.unaries: dict[str, dict[Entity, bool]] = dict()                  # λx.P(x)
-        self.binaries: dict[str, dict[Entity, dict[Entity, bool]]] = dict()   # λy.λx.R(x,y)
 
 class Lemmas:
     """
@@ -673,7 +663,7 @@ class Logic:
     def build_expr(self, 
                    cat: str, 
                    lemma: str, 
-                   arity: int = 2):
+                   arity: int = 1):
         """
         Given a category, lemma, and arity, build the appropriate expression
 
@@ -717,31 +707,32 @@ class Logic:
             case _:
                 return Epsilon()
                 
-    def _proc_tree(self, 
-                   symbol: str, 
-                   tree: str | Tree,
+    def _proc_tree(self, node: Node,
                    lemmas: dict[tuple[str, str], str]) -> Expr:
         """
         Function for processing trees which could either be an nltk.Tree object
         or alternatively just a string.
 
-        :param symbol: non-terminal symbol
-        :param tree: input syntactic tree
+        :param node: input syntactic tree
         :param lemmas: lemma dictionary for sentence
         """
 
-        if isinstance(tree, str):
-            token = tree
-            cat = symbol
+        if isinstance(node.data, str):
+            token = node.data
+            cat = node.cat
             lemma = lemmas[(token,cat)]
+            if cat == 'V':
+                if node.feats['trans'] == 'True':
+                    arity = 2
+                    expr = self.build_expr(cat, lemma, arity)
+                    return expr 
             expr = self.build_expr(cat, lemma)
             return expr
 
         else:
-            expr = self.denotation(tree, lemmas)
-            return expr
+            raise ValueError("Incorrect node.")
 
-    def _object_phrase(self, tree: Tree, lemmas) -> Expr:
+    def _object_phrase(self, node: Node, lemmas) -> Expr:
         """
         A method for calculating the semantic expression of a tree in object
         position. When the main verb is the copula "to be" it is often
@@ -750,31 +741,59 @@ class Logic:
 
         'Aristotle is a man' -> man(Aristotle)
 
-        :param tree: input syntactic tree
+        :param node: input syntactic tree
         """
 
-        children: list[Tree] = [child for child in tree]
-        symbols: list[str] = [self._get_symbol(tree) for tree in children]
-
-        if symbols == ['D', 'NP']:
-            
-            if len(children[0]) == 1:
-                lemma = children[0][0]
-            else:
-                raise TypeError("invalid child of node-type D")
-
-            if lemma == 'a':
-                tree = children[1]
-                symbol = self._get_symbol(tree)
-                expr = self._proc_tree(symbol, tree, lemmas)
-            else:
-                symbol = self._get_symbol(tree)
-                expr = self._proc_tree(symbol, tree, lemmas)
-
-            return expr
+        if isinstance(node.data, str):
+            raise ValueError("incorrect types for object phrase of copula.")
 
         else:
-            raise ValueError("incorrect types for object phrase of copula.")
+            if len(node.data) == 2:
+                left, right = node.data
+                lcat = left.cat
+                rcat = right.cat
+
+                if (lcat, rcat) == ('D', 'NP'):
+                    if isinstance(left.data, str):
+                        lemma = left.data
+
+                        if lemma == 'a':
+                            expr = self.denotation(right, lemmas)
+
+                        elif lemma == 'an':
+                            expr = self.denotation(right, lemmas)
+
+                        else:
+                            expr = self.denotation(node, lemmas)
+
+                        return expr
+                    raise ValueError('Incorrect object phrase.')
+                raise ValueError('Incorrect object phrase.')
+            raise ValueError('Incorrect object phrase.')
+            
+
+        # children: list[Tree] = [child for child in tree]
+        # symbols: list[str] = [self._get_symbol(tree) for tree in children]
+
+        # if symbols == ['D', 'NP']:
+        #     
+        #     if len(children[0]) == 1:
+        #         lemma = children[0][0]
+        #     else:
+        #         raise TypeError("invalid child of node-type D")
+
+        #     if lemma == 'a':
+        #         tree = children[1]
+        #         symbol = self._get_symbol(tree)
+        #         expr = self._proc_tree(symbol, tree, lemmas)
+        #     else:
+        #         symbol = self._get_symbol(tree)
+        #         expr = self._proc_tree(symbol, tree, lemmas)
+
+        #     return expr
+
+        # else:
+        #     raise ValueError("incorrect types for object phrase of copula.")
 
     def _get_symbol(self, tree: Tree | str) -> str:
         """
@@ -814,7 +833,7 @@ class Logic:
             raise ValueError(f"NonTerminal that produces a terminal should only have one child: has {len(children)}")
 
     def denotation(self, 
-                   tree: Tree, 
+                   node: Node, 
                    lemmas: dict[tuple[str,str], str]) -> Expr:
         """
         Given an input tree and a dictionary containing the form-lemma
@@ -824,18 +843,14 @@ class Logic:
         :param tree: input tree
         :param lemmas: lemma dictionary
         """
+        match node.data:
 
-        symbol = self._get_symbol(tree)
-        children: list[Tree] = [child for child in tree]
-
-        match children:
-            case [tree]:
-                expr = self._proc_tree(symbol, tree, lemmas)
+            case [node]:
+                expr = self.denotation(node, lemmas)
 
             case [left, right]:
-
-                left_sym = self._get_symbol(left)
-                right_sym = self._get_symbol(right)
+                left_cat = left.cat
+                right_cat = right.cat
 
                 # Here we will check if the left element is a verb. We
                 # specifically whether the verb is the copula (the verb "to
@@ -844,19 +859,22 @@ class Logic:
                 # that will only return the denotation of the NP without the article
                 # if the article is "a" or "an" (indefinite).
 
-                if (left_sym, right_sym) == ('V', 'DP'):
-                    left_word = self._get_terminal(left)
-                    left_lem = lemmas[(left_word, left_sym)]
-                    if left_lem == 'be':
-                        right_expr = self._object_phrase(right, lemmas)
+                if (left_cat, right_cat) == ('V', 'DP'):
+                    if isinstance(left.data, str):
+                        left_word = left.data
+                        left_lem = lemmas[(left_word, left_cat)]
+                        if left_lem == 'be':
+                            right_expr = self._object_phrase(right, lemmas)
+                        else:
+                            right_expr = self.denotation(right, lemmas)
                     else:
-                        right_expr = self._proc_tree(symbol, right, lemmas)
+                        raise ValueError('VP does not have right children.')
                 else:
-                    right_expr = self._proc_tree(symbol, right, lemmas)
+                    right_expr = self.denotation(right, lemmas)
 
-                left_expr = self._proc_tree(symbol, left, lemmas)
+                left_expr = self.denotation(left, lemmas)
 
-                if symbol == 'NP':
+                if node.cat == 'NP':
                     expr = self.modify(left_expr, right_expr)
                 else:
                     expr = self.beta_reduction((left_expr,right_expr))
@@ -865,9 +883,252 @@ class Logic:
                 expr = Epsilon()
 
             case _:
-                raise ValueError("invalid tree format")
+                expr = self._proc_tree(node, lemmas)
 
         return expr
+
+        # symbol = self._get_symbol(tree)
+        # children: list[Tree] = [child for child in tree]
+
+
+        # match children:
+        #     case [tree]:
+        #         expr = self._proc_tree(symbol, tree, lemmas)
+
+        #     case [left, right]:
+
+        #         left_sym = self._get_symbol(left)
+        #         right_sym = self._get_symbol(right)
+
+        #         # Here we will check if the left element is a verb. We
+        #         # specifically whether the verb is the copula (the verb "to
+        #         # be") and the complement of the V node is an object DP. If so,
+        #         # the object DP will need a different denotation function
+        #         # that will only return the denotation of the NP without the article
+        #         # if the article is "a" or "an" (indefinite).
+
+        #         if (left_sym, right_sym) == ('V', 'DP'):
+        #             left_word = self._get_terminal(left)
+        #             left_lem = lemmas[(left_word, left_sym)]
+        #             if left_lem == 'be':
+        #                 right_expr = self._object_phrase(right, lemmas)
+        #             else:
+        #                 right_expr = self._proc_tree(symbol, right, lemmas)
+        #         else:
+        #             right_expr = self._proc_tree(symbol, right, lemmas)
+
+        #         left_expr = self._proc_tree(symbol, left, lemmas)
+
+        #         if symbol == 'NP':
+        #             expr = self.modify(left_expr, right_expr)
+        #         else:
+        #             expr = self.beta_reduction((left_expr,right_expr))
+
+        #     case []:
+        #         expr = Epsilon()
+
+        #     case _:
+        #         raise ValueError("invalid tree format")
+
+        # return expr
+
+class Model:
+    """
+    Mathematical structure for representing the values set for predicates
+    through declarative sentences. This is used to evaluate expressions
+    for Truth-Value, or to answer queries.
+    """
+
+    def __init__(self) -> None:
+        self.entities: set[str] = set()                             # x : e
+        self.unaries: dict[str, set[str]] = dict()                  # λx.P(x)
+        self.binaries: dict[str, set[tuple[str,str]]] = dict()   # λy.λx.R(x,y)
+
+        self.logic = Logic()
+        self.count: int = 1
+
+    def _fmt_entities(self) -> str:
+        entities_str = ', '.join(self.entities)
+        out_str = f"entities: <{entities_str}>"
+        return out_str
+
+    def _fmt_unaries(self) -> str:
+        lines = []
+        for pred in self.unaries:
+            es = ', '.join(self.unaries[pred])
+            line = f"pred: <{es}>"
+            lines.append(line)
+        out_str = '\n'.join(lines)
+        return out_str
+
+    def _fmt_binaries(self) -> str:
+        lines = []
+        for pred in self.binaries:
+            pair_strs = []
+            pairs = self.binaries[pred]
+            for (x, y) in pairs:
+                pair_str = f"<{x}, {y}>"
+                pair_strs.append(pair_str)
+            temp_str = ', '.join(pair_strs)
+            line = f"pred: ({temp_str})"
+            lines.append(line)
+        out_str = '\n'.join(lines)
+        return out_str
+
+    def __str__(self) -> str:
+        entities_str = self._fmt_entities()
+        unaries_str = self._fmt_unaries()
+        binaries_str = self._fmt_binaries()
+        output = '\n'.join([entities_str, unaries_str, binaries_str])
+        return output
+
+    def new_var(self) -> Entity:
+        name = "x{self.count}"
+        self.count = self.count + 1
+        entity = Const(name)
+        return entity
+
+    def assignment(self, expr):
+        values = []
+        for e in self.entities:
+            c = Const(e)
+            expr = self.logic.beta_reduction((c,expr))
+            value = self.eval(expr)
+            values.append(value)
+        return values
+
+    def decl(self, expr: Expr):
+
+        match expr:
+
+            case Pred(term, args):
+
+                f = str(term)
+                for entity in args:
+                    self.entities.add(str(entity))
+
+                if len(args) == 1:
+                    [x] = args
+                    x = str(x)
+                    if f not in self.unaries:
+                        self.unaries[f] = set()
+                    self.unaries[f].add(x)
+
+                elif len(args) == 2:
+                    [x, y] = args
+                    x, y = str(x), str(y)
+                    if f not in self.binaries:
+                        self.binaries[f] = set()
+                    pair = (x, y)
+                    self.binaries[f].add(pair)
+
+                else:
+                    raise ValueError("Incorrect arity for pred in evaluation.")
+
+            case Op(rator=_, args=args):
+                for expr in args:
+                    self.decl(expr)
+
+            case Bind(binder, var, expr):
+                expr = Bind(LAMBDA, var, expr)
+
+                if binder == FORALL:
+                    exprs = []
+                    for e in self.entities:
+                        c = Const(e)
+                        new_expr = self.logic.beta_reduction((c,expr))
+                        exprs.append(new_expr)
+                    for expr in exprs:
+                        self.decl(expr)
+
+                elif binder == EXISTS:
+                    e = self.new_var()
+                    expr = self.logic.beta_reduction((e,expr))
+                    self.decl(expr)
+
+                else:
+                    raise ValueError("Invalid binder in decl.")
+
+    def eval(self, expr: Expr) -> list[str] | bool:
+
+        match expr:
+
+            case Pred(term, args):
+                f = str(term)
+                arity = len(args)
+
+                if arity == 1:
+                    [x] = args
+                    x = str(x)
+
+                    if f in self.unaries:
+                        value = x in self.unaries[f]
+                    else:
+                        value = False
+                    return value
+
+                elif arity == 2:
+                    [x, y] = args
+                    x, y = str(x), str(y)
+
+                    if f in self.binaries:
+                        value = (x, y) in self.binaries[f]
+                    else:
+                        value = False
+                    return value
+                else:
+                    raise ValueError("Incorrect arity for pred in evaluation.")
+
+            case Op(rator, args):
+                arity = len(args)
+                vals = [self.eval(expr) for expr in args]
+                if arity == 1:
+                    [value] = vals
+                    return value
+                elif arity == 2:
+                    p, q = vals
+
+                    if rator == AND:
+                        value = p and q
+                    elif rator == OR:
+                        value = p or q
+                    elif rator == IFTHEN:
+                        value = (not p) or q
+                    else:
+                        raise ValueError("Incorrect arity for Op expr in eval.")
+                    return value
+                else:
+                    raise ValueError("Incorrect arity for Op expr in eval.")
+
+            case Bind(binder, var, expr):
+                expr = Bind(LAMBDA, var, expr)
+
+                if binder == FORALL:
+                    values = self.assignment(expr)
+                    value = all(values)
+                    return value
+
+                elif binder == EXISTS:
+                    values = self.assignment(expr)
+                    value = any(values)
+                    return value
+
+                elif binder == QUEST:
+                    es = []
+                    for e in self.entities:
+                        c = Const(e)
+                        new_expr = self.logic.beta_reduction((c,expr))
+                        if self.eval(new_expr) == True:
+                            es.append(e)
+                    return es
+
+
+
+                else:
+                    raise ValueError("Incorrect binder in Eval.")
+
+            case _:
+                raise ValueError("Invalid expression for evaluation.")
 
 
 if __name__ == "__main__":

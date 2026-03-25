@@ -1,8 +1,12 @@
 # repository: pysemantics
 # Author: Ethan Yates <ethan.t.yates@gmail.com>
 
+from __future__ import annotations
+
 from nltk.grammar import FeatureGrammar, FeatStructNonterminal
 from nltk.parse.featurechart import FeatureChartParser
+from nltk.featstruct import Feature
+from nltk.tree import Tree
 from collections import defaultdict
 import spacy
 
@@ -50,11 +54,10 @@ class Grammar:
         VP/?x[+wh] -> V DP/DP[+wh]
         VP/?x -> V/V A
                | V/V DP
-        VP -> V DP
-            | V CP
-            | V A
+        VP -> V[+trans] DP
+            | V[-trans]
+            | V[+trans] A
             | VP PP
-            | V
         DP[-wh] -> D NP
                 | NP
         NP -> N
@@ -101,8 +104,12 @@ class Grammar:
         """
         for tag, token in zip(tags, tokens):
             if token in self.copula:
-                self._add_rule('V', token)
-            self._add_rule(tag, token)
+                self._add_rule('V[+trans]', token)
+            elif tag == 'V':
+                self._add_rule('V[+trans]', token)
+                self._add_rule('V[-trans]', token)
+            else:
+                self._add_rule(tag, token)
 
     def export_parser(self) -> FeatureChartParser:
         """
@@ -192,6 +199,61 @@ class Grammar:
 
         return symbol
 
+class Node:
+
+    cat: str
+    data: str | list[Node]
+    feats: dict[str,str]
+
+    def __init__(self, tree: Tree):
+        # typ = Feature('type')
+        hash_struct = tree.label()
+        items = hash_struct._items()
+        pairs = [(str(k), str(v)) for (k,v) in items]
+        self.feats = dict(pairs)
+        self.cat = str(self.feats['*type*'])
+        trees = [tree for tree in tree]
+
+        if len(trees) == 0:
+            self.data = []
+
+        elif len(trees) == 1:
+            leaf = trees[0]
+
+            if isinstance(leaf, str):
+                self.data = str(leaf)
+            else:
+                node = Node(leaf)
+                self.data = [node]
+
+        elif len(trees) == 2:
+            nodes = [Node(tree) for tree in trees]
+            self.data = nodes
+
+        else:
+            raise ValueError("Trees cannot have more than two braches.")
+
+    def __str__(self):
+        
+        if isinstance(self.data, str):
+            return f"{self.cat}[{self.data}]"
+
+        else:
+
+            if len(self.data) == 0:
+                return f"{self.cat}[]"
+
+            elif len(self.data) == 1:
+                node = self.data[0]
+                return f"{self.cat}[{node}]"
+        
+            elif len(self.data) == 2:
+                [left, right] = self.data
+                return f"{self.cat}[{left}, {right}]"
+
+            else:
+                raise ValueError("Too many values in node children.")
+
 
 class Parser:
     """
@@ -244,4 +306,6 @@ class Parser:
         self._parser = self._grammar.export_parser()
         trees = self._parser.parse(tokens)
 
-        return trees, lemmas
+        nodes: list[Node] = [Node(tree) for tree in trees]
+
+        return nodes, lemmas

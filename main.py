@@ -1,5 +1,5 @@
 from logic import Logic, Expr, Model
-from parse import Parser
+from parse import Parser, Node
 
 import warnings
 
@@ -17,7 +17,7 @@ class SymbolicAI:
         self.model: Model = Model()
         self.logic: Logic = Logic()
 
-    def run(self, raw_input: str) -> Expr:
+    def run(self, raw_input: str):
         """
         Runs the whole program a single time on a single input and returns a
         single output. 
@@ -28,21 +28,24 @@ class SymbolicAI:
 
         returns expr
         """
-        trees, lemmas = self.parser.parse(raw_input)
-        exprs: list[Expr] = []
-        for tree in trees:
-            expr = self.logic.denotation(tree, lemmas)
-            exprs.append(expr)
+        nodes, lemmas = self.parser.parse(raw_input)
+        # if len(nodes) > 1:
+        #     warnings.warn("Ambiguous sentence: tree arbitrarily selected.", SyntaxWarning)
+        node: Node = nodes[0]
+        expr = self.logic.denotation(node, lemmas)
 
-        expr = exprs[0]
+        punct_node = node.data[1]
+        if isinstance(punct_node, Node):
+            punct = punct_node.data
+            if punct == '.':
+                self.model.decl(expr)
+                return expr, None
+            elif punct == '?':
+                value = self.model.eval(expr)
+                return expr, value
+        else:
+            raise ValueError("Invalid punctuation.")
 
-        if len(exprs) > 1:
-            warnings.warn("Ambiguous sentence: tree arbitrarily selected.", SyntaxWarning)
-
-        return expr
-        # value = self.model.evaluate(expr)
-
-        # return value
 
     def repl(self) -> None:
         """
@@ -52,11 +55,28 @@ class SymbolicAI:
 
         type "quit" to exit from the REPL.
         """
+        show_expr = False
 
         while (raw_input := input("|- ")) != 'quit':
 
-            expression = self.run(raw_input)
-            print(expression)
+        
+            match raw_input:
+                case "--show-formulae":
+                    show_expr = True
+                case "--hide-formulae":
+                    show_expr = False
+                case raw_input:
+
+                    try:
+                        expr, value = self.run(raw_input)
+                        if value:
+                            print(value)
+
+                        if show_expr:
+                            print(expr)
+
+                    except:
+                        print("Error: invalid input.")
 
 
 if __name__ == "__main__":
